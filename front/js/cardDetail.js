@@ -273,7 +273,27 @@ function allowDrop(event) {
 function drag(event) {
   const taskId = event.target.getAttribute("data-task-id");
   event.dataTransfer.setData("text/plain", taskId);
+  // Crear una imagen personalizada para el icono de arrastre
+  var dragIcon = document.createElement('img');
+  dragIcon.src = 'http://localhost:4000/assets/copy.png';
+  dragIcon.width = 90;
+  dragIcon.style.opacity = 0.5;
+  dragIcon.style.position = 'absolute'; 
+  dragIcon.style.left = '0'; 
+  dragIcon.style.top = '0';
+
+  // Añade el dragIcon al cuerpo del documento para garantizar su visibilidad durante el arrastre
+  document.body.appendChild(dragIcon);
+
+  // Establece el dragIcon como el icono de arrastre con un desplazamiento personalizado
+  event.dataTransfer.setDragImage(dragIcon, 10, 10);
+
+  // Elimina el dragIcon del cuerpo del documento después del arrastre
+  setTimeout(() => {
+      document.body.removeChild(dragIcon);
+  }, 0);
 }
+
 function drop(event) {
   event.preventDefault();
   var data = event.dataTransfer.getData("text");
