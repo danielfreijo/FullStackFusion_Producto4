@@ -1,97 +1,58 @@
+// Importación de módulos y configuraciones necesarias
 const express = require('express');
 const path = require('path');
-const http = require('http');
+const { createServer } = require('http');
 const { Server } = require('socket.io');
-const { ApolloServer} = require('apollo-server-express');
+const { ApolloServer } = require('apollo-server-express');
+const { execute, subscribe } = require('graphql');
+const { SubscriptionServer } = require('subscriptions-transport-ws');
 const { projectTypeDefs, projectResolvers } = require('./controllers/projectsController');
 const { taskTypeDefs, taskResolvers } = require('./controllers/tasksController');
-const { connection} = require('./config/connectionDB');
-
+const { connection } = require('./config/connectionDB');
+const pubsub = require('./pubsub');
 const multer = require('multer');
+
+// Configuración de multer para la carga de archivos
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, 'front/documents') // Cambia 'uploads/' a 'front/documents'
+    cb(null, 'front/documents');
   },
   filename: function (req, file, cb) {
-    cb(null, file.originalname + '-' + Date.now() + path.extname(file.originalname))
+    cb(null, file.originalname + '-' + Date.now() + path.extname(file.originalname));
   }
-})
+});
+const upload = multer({ storage: storage });
 
-const upload = multer({ storage: storage })
-
+// Creación de la aplicación Express
 const app = express();
+
+// Conexión a la base de datos
 connection();
 
-const publicPath = path.join(__dirname, "front");
-
-app.use(express.static(path.join( publicPath )));
-
+// Middleware para servir archivos estáticos
+const publicPath = path.join(__dirname, 'front');
+app.use(express.static(path.join(publicPath)));
 app.get("/", (req, res) => {
-  res.sendFile(path.join(publicPath, "index.html"));
+  res.sendFile(path.join(publicPath, 'index.html'));
 });
 
-const server = http.createServer(app);
-const io = new Server(server);
+// Creación del servidor HTTP y del servidor de Socket.IO
+const httpServer = createServer(app);
+const io = new Server(httpServer);
 
-// Manejo de conexiones de socket.io
+// Manejo de conexiones de Socket.IO
 io.on("connection", (socket) => {
   console.log("Usuario conectado");
-
   socket.on('mensaje', (mensaje) => {
     console.log('Mensaje recibido:', mensaje);
-    // Emitir el mensaje a todos los clientes conectados
     io.emit('mensaje', mensaje);
   });
-  
-  // Añadir el evento projectAdded
-  socket.on("projectAdded", (newProject) => {
-    console.log("Nuevo proyecto recibido vía Socket.io", newProject);
-    socket.broadcast.emit("updateProjects", newProject);
-  });
-
-  // Añadir el evento projectUpdated
-  socket.on("projectUpdated", (updatedProject) => {
-    console.log("Proyecto actualizado recibido vía Socket.io", updatedProject);
-    socket.broadcast.emit("updateProject", updatedProject);  
-  });
-
-  // Añadir el evento projectDeleted
-  socket.on("projectDeleted", (projectId) => {
-    console.log("Proyecto eliminado recibido vía Socket.io", projectId);
-    socket.broadcast.emit("deletedProject", projectId);  
-  });
-
-  // Añadir el evento taskCreated
-  socket.on("taskCreated", (newTask) => {
-    console.log("Nueva tarea recibido vía Socket.io", newTask);
-    socket.broadcast.emit("updateTasks", newTask);
-  });
-
-  // Añadir el evento taskUpdated
-  socket.on("taskUpdated", (updatedTask) => {
-    console.log("tarea actualizada recibida vía Socket.io", updatedTask);
-    socket.broadcast.emit("updateTask", updatedTask);
-  });
-  socket.on("taskEndedUpdated", (updatedTask) => {
-    console.log("tarea finalizada recibida vía Socket.io", updatedTask);
-    socket.broadcast.emit("updateTaskEnded", updatedTask);
-  });
-  socket.on("taskStateUpdated", (updatedTask) => {
-    console.log("tarea finalizada recibida vía Socket.io", updatedTask);
-    socket.broadcast.emit("taskStateUpdated", updatedTask);
-  });
-
-  // Añadir el evento taskDeleted
-  socket.on("taskDeleted", (taskId) => {
-    console.log("Tarea eliminada recibido vía Socket.io", taskId);
-    socket.broadcast.emit("deletedTask", taskId);  
-  });
-
   socket.on("disconnect", () => {
     console.log("Usuario desconectado");
   });
 });
 
+// Función asincrónica para iniciar el servidor Apollo
 async function startServer() {
   const apolloServer = new ApolloServer({
     typeDefs: [projectTypeDefs, taskTypeDefs],
@@ -103,25 +64,42 @@ async function startServer() {
       Mutation: {
         ...projectResolvers.Mutation,
         ...taskResolvers.Mutation
+      },
+      Subscription: {
+        ...projectResolvers.Subscription,
+        ...taskResolvers.Subscription
       }
     },
-    context: ({ req }) => ({ io }) // Pasando el objeto io al contexto de Apollo
+    context: ({ req }) => ({ io, pubsub }) 
   });
 
   await apolloServer.start();
-  apolloServer.applyMiddleware({ app, path: '/api'});
+  apolloServer.applyMiddleware({ app, path: '/api' });
 
+  // Configuración de SubscriptionServer
+  SubscriptionServer.create({
+    schema: apolloServer.schema,
+    execute,
+    subscribe,
+    onConnect: () => console.log('Client connected for subscriptions'),
+  }, {
+    server: httpServer,
+    path: '/graphql',
+  });
+
+  // Middleware para manejar rutas no encontradas
   app.use((req, res, next) => {
     res.status(404).send('Error 404');
   });
 
+  // Configuración del puerto de escucha del servidor
   const PORT = process.env.PORT || 4000;
-  server.listen(PORT, () =>
-    console.log(`Servidor corriendo en http://localhost:${PORT}`)
-    //console.log(`Servidor corriendo en http://localhost:${PORT}${server.graphqlPath}`)
-  );
+  httpServer.listen(PORT, () => {
+    console.log(`Servidor corriendo en http://localhost:${PORT}`);
+  });
 }
 
+// Ruta para la carga de archivos
 app.post('/upload', upload.single('file'), (req, res) => {
   res.json({
     message: 'Archivo subido con éxito.',
@@ -129,4 +107,5 @@ app.post('/upload', upload.single('file'), (req, res) => {
   });
 });
 
+// Iniciar el servidor
 startServer();

@@ -38,6 +38,12 @@ const taskTypeDefs = gql`
         updateTask(id: ID!, input: TaskInput!): Task
         deleteTask(id: ID!): String
     }
+
+    type Subscription {
+        taskCreated: Task
+        taskUpdated: Task
+        taskDeleted: ID
+    }
 `;
 
 const taskResolvers = { 
@@ -53,15 +59,14 @@ const taskResolvers = {
     },
 
     Mutation: { 
-        createTask: async (_, { input }, { io })  => {
+        createTask: async (_, { input }, { pubsub })  => {
             if (input.title.trim() === '' || input.description.trim() === '') {
                 throw new Error('Este campo de la tarea no puede estar vacío.');
             }
             try {
                 const newTask = new task({ ...input });
                 const savedTask = await newTask.save();
-                io.emit('taskCreated', savedTask);
-                console.log("nueva tarea CONTROLLER", savedTask);
+                pubsub.publish('TASK_CREATED', { taskCreated: savedTask });
                 return savedTask;
             } catch (error) {
                 console.log(error);
@@ -70,32 +75,38 @@ const taskResolvers = {
             }
         },
 
-        updateTask: async (_, { id, input }, { io }) => {
+        updateTask: async (_, { id, input }, { pubsub }) => {
             try {
-                const updatedTask =  await task.findByIdAndUpdate(id, input, { new: true });
-                io.emit('taskUpdated', updatedTask);
-                console.log("tarea actualizada CONTROLLER", updatedTask);
+                const updatedTask = await task.findByIdAndUpdate(id, input, { new: true });
+                pubsub.publish('TASK_UPDATED', { taskUpdated: updatedTask });
                 return updatedTask;
             } catch (error) {
                 throw new Error('Error al actualizar la tarea.');
             }
         },
 
-        deleteTask: async (_, { id }, { io }) => {
+        deleteTask: async (_, { id }, { pubsub }) => {
             try {
-                const deletedTask = await task.findByIdAndDelete(id);
-                if (deletedTask) {
-                    io.emit('taskDeleted', { id });
-                    console.log("tarea eliminada CONTROLLER", id);
-                    return 'Tarea eliminada correctamente.';
-                } else {
-                    throw new Error('Error al eliminar la tarea.');
-                }
+                await task.findByIdAndDelete(id);
+                pubsub.publish('TASK_DELETED', { taskDeleted: id });
+                return 'Tarea eliminada correctamente.';
             } catch (error) {
                 throw new Error('Error al eliminar la tarea.');
             }
+        },
+    },
+    
+    Subscription: {
+        taskCreated: {
+            subscribe: (_, __, { pubsub }) => pubsub.asyncIterator('TASK_CREATED')
+        },
+        taskUpdated: {
+            subscribe: (_, __, { pubsub }) => pubsub.asyncIterator('TASK_UPDATED')
+        },
+        taskDeleted: {
+            subscribe: (_, __, { pubsub }) => pubsub.asyncIterator('TASK_DELETED')
         }
-    }   
+    }
 };
 
 module.exports = { taskTypeDefs, taskResolvers };

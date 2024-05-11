@@ -1,3 +1,20 @@
+import client from './apollo-client';
+import { gql } from '@apollo/client';
+
+// Ejemplo de cómo podrías realizar una consulta
+client.query({
+  query: gql`
+    query GetProjects {
+      getProjects {
+        id
+        name
+        description
+      }
+    }
+  `
+}).then(result => console.log(result.data))
+  .catch(error => console.error(error));
+  
 let projects = [];
 const socket = io();
 
@@ -44,42 +61,6 @@ socket.on('mensaje', (mensaje) => {
     container_borrar.innerHTML = '';
     container_borrar.classList.remove('fade-out'); // Remover la clase de desvanecimiento
   }, 5000); // Remover el mensaje después de 5 segundos
-});
-
-
-socket.on('connect', () => {
-  console.log('Conectado al servidor de Socket.io');
-  
-  socket.on('projectAdded', async function(newProject) {
-    console.log('Nuevo proyecto recibido EN EL FRONTAL:', newProject);
-    projects = await getProjects();
-    projects.push(newProject);
-    showRecentProjects(projects);
-    showAllProjects(projects);
-    showPriorityProjects(projects);
-  
-  });
-  
-  socket.on('projectUpdated', async function(updatedProject) {
-    console.log('Proyecto actualizado recibido EN EL FRONTAL:', updatedProject);
-    let project = projects.find(p => p.id === updatedProject._id);
-    
-    if (project) {
-      projects = await getProjects();
-      project.priority = updatedProject.priority; 
-      showRecentProjects(projects);
-      showAllProjects(projects);
-      showPriorityProjects(projects);
-    }
-  });
-  
-  socket.on('projectDeleted', async function(projectId) {
-    console.log('Proyecto eliminado recibido EN EL FRONTAL:', projectId);
-    projects = await getProjects();
-    showRecentProjects(projects);
-    showAllProjects(projects);
-    showPriorityProjects(projects);
-  });
 });
 
 // 1. Definiciones de Funciones Asíncronas para interactuar con la API
@@ -134,6 +115,7 @@ function createProjectCard(project) {
   const starIcon = project.priority === true 
   ? '<img src="/assets/estrellaM.png" alt="prioridad" style="width: 22px; height: 22px;">' 
   : '<img src="/assets/estrellaV.png" alt="sin prioridad" style="width: 22px; height: 22px;">';
+  socket.emit('mensaje', "proyecto creado" +project.name); 
 
   return `
   <a class="card" href="/cardDetail.html?id=${project.id}" data-id="${project.id}" style="${backgroundStyle};">
@@ -144,7 +126,6 @@ function createProjectCard(project) {
       </div>
   </a>
   `;
-  socket.emit('mensaje', "proyecto creado" +project.name); 
 }
 function showRecentProjects(projects) {
   const recentProjects = $('#recentProjects');
@@ -341,9 +322,9 @@ $(document).ready(async function() {
       } else {
         //console.log("Proyecto creado exitosamente:", responseBody.data.createProject);
         projects.push(responseBody.data.createProject);
-
-        // Enviar un mensaje al servidor de Socket.io
-        socket.emit('projectAdded', responseBody.data.createProject);
+        showRecentProjects(projects);
+        showAllProjects(projects);
+        showPriorityProjects(projects);
 
         $('#addProjectModal').modal('hide');
         socket.emit('mensaje', "Nuevo proyecto creado."); 
@@ -418,11 +399,9 @@ $(document).ready(async function() {
         
         // Actualiza el estado local del proyecto
         project.priority = newPriority;
+        showPriorityProjects(projects);
 
-        // Enviar un mensaje al servidor de Socket.io
-        socket.emit('projectUpdated', { id: projectId, priority: newPriority });
         socket.emit('mensaje', "Proyecto actualizado"); 
-
       }
     } catch (error) {
       console.error("Error al realizar la solicitud a GraphQL:", error);
@@ -484,21 +463,19 @@ $(document).ready(async function() {
         } else {
           //console.log("Proyecto eliminado con éxito", responseBody.data.deleteProject);
           projects = projects.filter(project => project.id !== projectId); 
-
-          // Enviar un mensaje al servidor de Socket.io
-          socket.emit('projectDeleted', { id: projectId });
+          showRecentProjects(projects); 
+          showAllProjects(projects);
+          showPriorityProjects(projects);
 
           $('#confirmationModal').modal('hide');
           socket.emit('mensaje', "Proyecto eliminado."); 
-
         }
       } catch (error) { 
         console.error("Error al realizar la solicitud a GraphQL:", error);
       }
     });
-    return false; // Evita el comportamiento predeterminado del enlace
+    return false;
   });
-
 });
 
 

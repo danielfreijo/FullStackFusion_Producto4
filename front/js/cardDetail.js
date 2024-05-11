@@ -51,66 +51,6 @@ socket.on('mensaje', (mensaje) => {
   }, 5000); // Remover el mensaje después de 5 segundos
 });
 
-async function updatesAlerts(){
-  const projectId = new URLSearchParams(window.location.search).get("id");
-  tasks = await getTasksByProjectId(projectId);
-  showTasksCards(tasks);
-}
-
-socket.on('connect', () => {
-  console.log('Conectado al servidor de Socket.io');
- 
-  socket.on('taskCreated', async function(newTask) {
-    console.log('Nueva TAREA recibido EN EL FRONTAL:', newTask);
-    let projectId = new URLSearchParams(window.location.search).get("id");
-    tasks = await getTasksByProjectId(projectId);
-    showTasksCards(tasks);
-  });
-  
-  socket.on('projectUpdated', async function(updatedProject) {
-    console.log('Proyecto actualizado recibido EN EL FRONTAL:', updatedProject);
-    
-    // Actualiza la UI sin recargar la página
-    if (updatedProject) {
-      $('#projectName').text(updatedProject.name);
-      $('#sidebarProjectName').text(updatedProject.name);
-      $('#sidebarDescription').text(updatedProject.description);
-      $('#sidebarDepartment').val(updatedProject.department);
-      $('#sidebarBackgroundColor').val(updatedProject.backgroundcolor);
-      if (updatedProject.backgroundimage) {
-          $('body').css("background-image", `url(/assets/BackgroundsProjects/${updatedProject.backgroundimage})`);
-      } else {
-          $('body').css("background-color", updatedProject.backgroundcolor);
-      }
-}
-  });
-
-  socket.on('taskUpdated', async function(updatedTask) {
-    console.log('Tarea actualizada recibido EN EL FRONTAL:', updatedTask);
-    let task = tasks.find((t) => t.id === updatedTask._id);
-    let projectId = new URLSearchParams(window.location.search).get("id");
-
-    if (task) {
-      task.title = updatedTask.title;
-      task.description = updatedTask.description;
-      task.responsible = updatedTask.responsible; 
-      task.enddate = updatedTask.enddate;
-      task.notes = updatedTask.notes; 
-      task.status = updatedTask.status;
-      tasks = await getTasksByProjectId(projectId);
-      showTasksCards(tasks);
-    }
-  });
-
-  socket.on('taskDeleted', async function(taskId) {
-    console.log('tarea eliminada recibido EN EL FRONTAL:', taskId);
-
-    let projectId = new URLSearchParams(window.location.search).get("id");
-    tasks = await getTasksByProjectId(projectId);
-    showTasksCards(tasks);
-  });
-});
-
 // Funciones asincronas 
 async function getProjectById(id) {
   const query = `
@@ -231,9 +171,6 @@ async function updateTaskEndDate(taskId, newEndDate) {
       throw new Error("Error al actualizar la tarea");
     } else {
       //console.log("FECHA actualizada:", responseBody.data.updateTask);
-
-      // Enviar la tarea actualizada a través de Socket.io
-      socket.emit('taskEndedUpdated', {id: taskId, ended: newEndDate});
     }
   } catch (error) {
     console.error("Error en la solicitud:", error);
@@ -275,9 +212,8 @@ async function updateTaskStateInProject(taskId, newState) {
       throw new Error('Error al actualizar la tarea');
     } else {
       //console.log('Tarea actualizada:', responseBody.data.updateTask);
-
-      // Enviar la tarea actualizada a través de Socket.io
-      socket.emit('taskStateUpdated', responseBody.data.updateTask);
+      tasks = await getTasksByProjectId(projectId);
+      showTasksCards(tasks);
     }
   } catch (error) {
     console.error('Error en la solicitud:', error);
@@ -318,9 +254,6 @@ async function updateDateAccessProject(projectId) {
       throw new Error("Error al actualizar la fecha de acceso del proyecto");
     } else {
       //console.log("Proyecto actualizado:", responseBody.data.updateProject);
-
-      // Enviar el proyecto actualizado a través de Socket.io
-      socket.emit('projectDateAccessUpdated', responseBody.data.updateProject);
     }
   } catch (error) {
     console.error("Error en la solicitud:", error);
@@ -370,9 +303,10 @@ async function updateTaskWithFilePath(taskId, filePath) {
     return;
   }
 
-  const serverUrl = 'http://localhost:4000'; 
+  const serverUrl = 'https://69d2dk-4000.csb.app'; 
   // Elimina 'front\' de la ruta del archivo
-  const adjustedFilePath = filePath.replace('front\\', '');
+  // const adjustedFilePath = filePath.replace('front\\', '');
+  const adjustedFilePath = filePath.replace('front/', '');
 
   const downloadUrl = `${serverUrl}/${adjustedFilePath.replace(/\\/g, '/')}`;
   console.log('URL de descarga:', downloadUrl);
@@ -435,6 +369,7 @@ function formatDate(dateString) {
 function createTaskCard(task) {
   const formattedDate = formatDate(task.enddate);
   const isEnded = task.ended ? "green-background" : "";
+  socket.emit('mensaje', "Tarjeta creada");
 
   return `
     <li class="btn btn-light task-card-btn " data-task-id="${task.id}" draggable="true" ondragstart="drag(event)" ondragover="return false;">  
@@ -449,8 +384,7 @@ function createTaskCard(task) {
         </div>
       </div>
     </li>
-  `;
-  socket.emit('mensaje', "Tarjeta creada");
+  `; 
 }
 function showTasksCards(tasks) {
   const taskCardsContainer = $(".task-cards");
@@ -503,7 +437,6 @@ function drop(event) {
       var targetState = targetContainer.getAttribute("data-state");
       draggedElement.dataset.state = targetState;
       updateTaskStateInProject(data, targetState);
-      socket.emit('mensaje', "Tarjeta ha cambiado de estado : "+targetState);
     } else {
       console.error(
         "No se pudo encontrar el contenedor de tarjetas dentro de la columna."
@@ -689,10 +622,7 @@ $(document).ready(async function () {
           throw new Error("Error al actualizar el proyecto");
         } else {
           socket.emit('mensaje', "Tarjeta [ " + newName + " ] --> Actualizada");
-          
-
-          // Enviar el proyecto actualizado a través de Socket.io
-          socket.emit('projectUpdated', responseBody.data.updateProject);
+          location.reload();
         }
       } catch (error) {
         console.error("Error en la solicitud:", error);
@@ -847,10 +777,8 @@ $(document).ready(async function () {
           throw new Error("Error al actualizar la tarea");
         } else {
           console.log("Tarea actualizada en la funcion:", responseBody.data.updateTask);
-          
-
-          // Enviar la tarea actualizada a través de Socket.io
-          socket.emit('taskUpdated', responseBody.data.updateTask);
+          tasks = await getTasksByProjectId(projectId);
+          showTasksCards(tasks);
         }
       } catch (error) {
         console.error("Error en la solicitud:", error);
@@ -919,8 +847,8 @@ $(document).ready(async function () {
           const taskId = responseBody.data.createTask.id;
           await loadFile('#taskFile', taskId);
 
-          // Enviar la tarea creada a través de Socket.io
-          socket.emit('taskCreated', responseBody.data.createTask);
+          tasks = await getTasksByProjectId(projectId);
+          showTasksCards(tasks);
 
           $("#addTaskModal").modal("hide");
           $("#addTaskForm")[0].reset();
@@ -976,12 +904,8 @@ $(document).ready(async function () {
             throw new Error("Error al eliminar la tarea");
           } else {
             console.log("Tarea eliminada:", responseBody.data.deleteTask);
-            
-            /*const updatedTasks = await getTasksByProjectId(projectId);
-            showTasksCards(updatedTasks); */
-
-            // Enviar el ID de la tarea eliminada a través de Socket.io
-            socket.emit('taskDeleted', taskId);
+            const updatedTasks = await getTasksByProjectId(projectId);
+            showTasksCards(updatedTasks); 
 
             $("#confirmationModal").modal("hide"); 
             socket.emit('mensaje', "Tarjeta eliminada."); 
@@ -990,7 +914,6 @@ $(document).ready(async function () {
           console.error("Error en la solicitud:", error);
         }
       });
-
       return false;
     });
   }
