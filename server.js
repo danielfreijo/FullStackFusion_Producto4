@@ -6,11 +6,13 @@ const { Server } = require('socket.io');
 const { ApolloServer } = require('apollo-server-express');
 const { execute, subscribe } = require('graphql');
 const { SubscriptionServer } = require('subscriptions-transport-ws');
+const { makeExecutableSchema } = require('@graphql-tools/schema');
 const { projectTypeDefs, projectResolvers } = require('./controllers/projectsController');
 const { taskTypeDefs, taskResolvers } = require('./controllers/tasksController');
 const { connection } = require('./config/connectionDB');
 const pubsub = require('./pubsub');
 const multer = require('multer');
+
 
 // Configuración de multer para la carga de archivos
 const storage = multer.diskStorage({
@@ -44,7 +46,7 @@ const io = new Server(httpServer);
 io.on("connection", (socket) => {
   console.log("Usuario conectado");
   socket.on('mensaje', (mensaje) => {
-    console.log('Mensaje recibido:', mensaje);
+    //console.log('Mensaje recibido:', mensaje);
     io.emit('mensaje', mensaje);
   });
   socket.on("disconnect", () => {
@@ -52,39 +54,45 @@ io.on("connection", (socket) => {
   });
 });
 
+const schema = makeExecutableSchema({
+  typeDefs: [projectTypeDefs, taskTypeDefs],
+  resolvers: {
+    Query: {
+      ...projectResolvers.Query,
+      ...taskResolvers.Query
+    },
+    Mutation: {
+      ...projectResolvers.Mutation,
+      ...taskResolvers.Mutation
+    },
+    Subscription: {
+      ...projectResolvers.Subscription,
+      ...taskResolvers.Subscription
+    }
+  },
+});
+
 // Función asincrónica para iniciar el servidor Apollo
 async function startServer() {
   const apolloServer = new ApolloServer({
-    typeDefs: [projectTypeDefs, taskTypeDefs],
-    resolvers: {
-      Query: {
-        ...projectResolvers.Query,
-        ...taskResolvers.Query
-      },
-      Mutation: {
-        ...projectResolvers.Mutation,
-        ...taskResolvers.Mutation
-      },
-      Subscription: {
-        ...projectResolvers.Subscription,
-        ...taskResolvers.Subscription
-      }
-    },
-    context: ({ req }) => ({ io, pubsub }) 
+    schema,
+    context: ({ req }) => ({ req, io, pubsub }) 
   });
 
   await apolloServer.start();
   apolloServer.applyMiddleware({ app, path: '/api' });
 
+  console.log("Schema:", schema);
   // Configuración de SubscriptionServer
   SubscriptionServer.create({
-    schema: apolloServer.schema,
+    schema,
     execute,
     subscribe,
     onConnect: () => console.log('Client connected for subscriptions'),
+    onDisconnect: () => console.log('Client disconnected from subscriptions')
   }, {
     server: httpServer,
-    path: '/graphql',
+    path: '/api/subscriptions'
   });
 
   // Middleware para manejar rutas no encontradas

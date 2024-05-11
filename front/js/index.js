@@ -1,20 +1,3 @@
-import client from './apollo-client';
-import { gql } from '@apollo/client';
-
-// Ejemplo de cómo podrías realizar una consulta
-client.query({
-  query: gql`
-    query GetProjects {
-      getProjects {
-        id
-        name
-        description
-      }
-    }
-  `
-}).then(result => console.log(result.data))
-  .catch(error => console.error(error));
-  
 let projects = [];
 const socket = io();
 
@@ -115,7 +98,6 @@ function createProjectCard(project) {
   const starIcon = project.priority === true 
   ? '<img src="/assets/estrellaM.png" alt="prioridad" style="width: 22px; height: 22px;">' 
   : '<img src="/assets/estrellaV.png" alt="sin prioridad" style="width: 22px; height: 22px;">';
-  socket.emit('mensaje', "proyecto creado" +project.name); 
 
   return `
   <a class="card" href="/cardDetail.html?id=${project.id}" data-id="${project.id}" style="${backgroundStyle};">
@@ -126,6 +108,7 @@ function createProjectCard(project) {
       </div>
   </a>
   `;
+  socket.emit('mensaje', "proyecto creado" + project.name); 
 }
 function showRecentProjects(projects) {
   const recentProjects = $('#recentProjects');

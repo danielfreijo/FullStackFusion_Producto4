@@ -369,7 +369,6 @@ function formatDate(dateString) {
 function createTaskCard(task) {
   const formattedDate = formatDate(task.enddate);
   const isEnded = task.ended ? "green-background" : "";
-  socket.emit('mensaje', "Tarjeta creada");
 
   return `
     <li class="btn btn-light task-card-btn " data-task-id="${task.id}" draggable="true" ondragstart="drag(event)" ondragover="return false;">  
@@ -385,6 +384,7 @@ function createTaskCard(task) {
       </div>
     </li>
   `; 
+  socket.emit('mensaje', "Tarjeta creada");
 }
 function showTasksCards(tasks) {
   const taskCardsContainer = $(".task-cards");

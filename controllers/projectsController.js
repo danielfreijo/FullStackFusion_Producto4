@@ -85,7 +85,9 @@ const projectResolvers = {
             try{
                 await Project.findByIdAndDelete(id);
                 pubsub.publish('PROJECT_DELETED', { projectDeleted: id });
+                console.log('PUBSUB', pubsub);  // Esto debería mostrar el objeto PubSub
                 return 'Proyecto eliminado correctamente.';
+                
             }catch (error) {
                 throw new Error('Error al eliminar el proyecto: ' + error.message);
             }
@@ -100,7 +102,13 @@ const projectResolvers = {
             subscribe: (_, __, { pubsub }) => pubsub.asyncIterator('PROJECT_UPDATED')
         },
         projectDeleted: {
-            subscribe: (_, __, { pubsub }) => pubsub.asyncIterator('PROJECT_DELETED')
+            subscribe: (_, __, { pubsub }) => {
+            console.log('pubsub:', pubsub);  // Esto debería mostrar el objeto PubSub
+            if (!pubsub) {
+                throw new Error('PubSub instance is undefined.');
+            }
+            return pubsub.asyncIterator('PROJECT_DELETED');
+            },
         },
     },
 };
