@@ -1,153 +1,138 @@
+// Importación de módulos y configuraciones necesarias
 const express = require('express');
 const path = require('path');
-const http = require('http');
+const { createServer } = require('http');
+// ------------------------------------------------------
+const { ApolloServer } = require('apollo-server-express');
+// ------------------------------------------------------
 const { Server } = require('socket.io');
-const { ApolloServer} = require('apollo-server-express');
-// Nuevas líneas para subscriptions-transport-ws
+// ------------------------------------------------------
+// Subscriptions
+// ------------------------------------------------------
+const { PubSub } = require('graphql-subscriptions');
 const { execute, subscribe } = require('graphql');
 const { SubscriptionServer } = require('subscriptions-transport-ws');
-// ---------------------------------------------------------------------------------
+const { makeExecutableSchema } = require('@graphql-tools/schema');
+// ------------------------------------------------------
+// Cargamos los controladores
+// ------------------------------------------------------
 const { projectTypeDefs, projectResolvers } = require('./controllers/projectsController');
 const { taskTypeDefs, taskResolvers } = require('./controllers/tasksController');
-const { connection} = require('./config/connectionDB');
+//const { pubsubSubscription } = require('./controllers/pubsubController');
+// ------------------------------------------------------
+const { connection } = require('./config/connectionDB');
+// ------------------------------------------------------
+const { WebSocketServer } = require('ws');
+const pubsub = require('./pubsub');
+const multer = require('multer');
+// ------------------------------------------------------
+//console.log("PubSub instance:", pubsub);
 
+// Configuración de multer para la carga de archivos
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'front/documents');
+  },
+  filename: function (req, file, cb) {
+    cb(null, file.originalname + '-' + Date.now() + path.extname(file.originalname));
+  }
+});
+const upload = multer({ storage: storage });
+
+// Creación de la aplicación Express
 const app = express();
+
+// Conexión a la base de datos
 connection();
 
-const publicPath = path.join(__dirname, "front");
-
-app.use(express.static(path.join( publicPath )));
-
+// Middleware para servir archivos estáticos
+const publicPath = path.join(__dirname, 'front');
+app.use(express.static(path.join(publicPath)));
 app.get("/", (req, res) => {
-  res.sendFile(path.join(publicPath, "index.html"));
+  res.sendFile(path.join(publicPath, 'index.html'));
 });
 
-const server = http.createServer(app);
-const io = new Server(server);
+// Creación del servidor HTTP y del servidor de Socket.IO
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  path: '/socket.io'
+});
 
-// Manejo de conexiones de socket.io
+const pubsub2 = new PubSub();
+
+// Manejo de conexiones de Socket.IO
 io.on("connection", (socket) => {
-  console.log("Usuario conectado");
-  // Maneja el evento 'mensaje' enviado por el cliente
+  pubsub.publish('mensaje', { newMessage: 'Usuario conectado a través de WebSocket'} );
   socket.on('mensaje', (mensaje) => {
-    console.log('Mensaje recibido:', mensaje);
-    // Emitir el mensaje a todos los clientes conectados
+    //console.log('Mensaje recibido:', mensaje);
     io.emit('mensaje', mensaje);
+    // Publicar el mensaje como una nueva suscripción de GraphQL
+    pubsub.publish('mensaje', { newMessage: mensaje });
+  });
+  socket.on("disconnect", () => {
+    pubsub.publish('mensaje', { newMessage: 'Usuario desconectado a través de WebSocket'} );
   });
 });
 
+const schema = makeExecutableSchema({
+  typeDefs: [projectTypeDefs, taskTypeDefs],
+  resolvers: {
+    Query: {
+      ...projectResolvers.Query,
+      ...taskResolvers.Query,
+    },
+    Mutation: {
+      ...projectResolvers.Mutation,
+      ...taskResolvers.Mutation,
+    },
+    Subscription: {
+      ...projectResolvers.Subscription,
+      ...taskResolvers.Subscription,
+    }
+  },
+});
+
+// Función asincrónica para iniciar el servidor Apollo
 async function startServer() {
   const apolloServer = new ApolloServer({
-    typeDefs: [projectTypeDefs, taskTypeDefs],
-    resolvers: {
-      Query: {
-        ...projectResolvers.Query,
-        ...taskResolvers.Query
-      },
-      Mutation: {
-        ...projectResolvers.Mutation,
-        ...taskResolvers.Mutation
-      }
-    },
-    context: ({ req }) => ({ io }) // Pasando el objeto io al contexto de Apollo
-    // context: ({ req }) => ({ req }) // Pasando el objeto req al contexto de Apollo
+    schema,
+    context: ({ req }) => ({ req, pubsub2, io }) 
+  });
+  await apolloServer.start();
+  apolloServer.applyMiddleware({ app, path: '/api' });
+
+  // Configuración de SubscriptionServer
+  SubscriptionServer.create({
+    schema,
+    execute,
+    subscribe,
+    onConnect: () => console.log('Client connected for subscriptions'),
+    onDisconnect: () => console.log('Client disconnected from subscriptions')
+  }, {
+    server: httpServer,
+    path: '/api/subscriptions'
   });
 
-  await apolloServer.start();
-  apolloServer.applyMiddleware({ app, path: '/api'});
-
+  // Middleware para manejar rutas no encontradas
   app.use((req, res, next) => {
     res.status(404).send('Error 404');
   });
 
-  // Crear el servidor de suscripciones WebSocket
-  // ---------------------------------------------------------------
-  SubscriptionServer.create(
-    { 
-      schema: apolloServer.schema,
-      execute,
-      subscribe,
-    },
-    { server, path: '/subscriptions' } // Ruta para las suscripciones
-  );
-
+  // Configuración del puerto de escucha del servidor
   const PORT = process.env.PORT || 4000;
-  server.listen(PORT, () =>
-    console.log(`Servidor corriendo en http://localhost:${PORT}`)
-    //console.log(Servidor corriendo en http://localhost:${PORT}${server.graphqlPath})
-  );
+  httpServer.listen(PORT, () => {
+    console.log(`🚀 Server ready at http://localhost:${PORT}`)
+    console.log(`🚀 Subscriptions ready at http://localhost:${PORT}/api/subscriptions`)
+  });
 }
 
-startServer();
-
-
-
-
-/*const express = require('express');
-const path = require('path');
-const { ApolloServer} = require('apollo-server-express');
-const { projectTypeDefs, projectResolvers } = require('./controllers/projectsController');
-const { taskTypeDefs, taskResolvers } = require('./controllers/tasksController');
-const { connection} = require('./config/connectionDB');
-const multer = require ('multer');
-const logger = require ('morgan');
-const socketIO = require('socket.io');
-
-// Crea la aplicación Express
-const app = express();
-const upload = multer();
-connection();
-
-// Define el directorio público
-const publicPath = path.join(__dirname, "front");
-
-// Configura la aplicación Express para servir archivos estáticos
-app.use(express.static(path.join( publicPath )));
-
-// Ruta para la página de inicio
-app.get("/", (req, res) => {
-  res.sendFile(path.join(publicPath, "index.html"));
+// Ruta para la carga de archivos
+app.post('/upload', upload.single('file'), (req, res) => {
+  res.json({
+    message: 'Archivo subido con éxito.',
+    path: req.file.path
+  });
 });
 
-async function startServer() {
-  const apolloServer = new ApolloServer({
-    typeDefs: [projectTypeDefs, taskTypeDefs],
-    resolvers: {
-      Query: {
-        ...projectResolvers.Query,
-        ...taskResolvers.Query
-      },
-      Mutation: {
-        ...projectResolvers.Mutation,
-        ...taskResolvers.Mutation
-      }
-    }
-  });
-
-  await apolloServer.start();
-  apolloServer.applyMiddleware({ app, path: '/api' });
-
-  // Iniciar el servidor de Socket.IO
-  const httpServer = app.listen(4000, () => {
-    console.log(`Servidor corriendo en http://localhost:4000`);
-  });
-
-  const io = socketIO(httpServer);
-
-  // Maneja el evento 'connection' de Socket.IO
-  io.on('connection', (socket) => {
-    console.log('Cliente conectado');
-
-    // Maneja el evento 'mensaje' enviado por el cliente
-    socket.on('mensaje', (mensaje) => {
-      console.log('Mensaje recibido:', mensaje);
-      // Emitir el mensaje a todos los clientes conectados
-      io.emit('mensaje', mensaje);
-    });
-  });
-
-}
-
+// Iniciar el servidor
 startServer();
-
-*/

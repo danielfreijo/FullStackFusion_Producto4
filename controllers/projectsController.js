@@ -1,6 +1,6 @@
 const { gql } = require('apollo-server-express');
 const Project = require('../models/project');
-
+const pubsub = require('../pubsub');
 const projectTypeDefs = gql`
 
     type Project {
@@ -38,6 +38,13 @@ const projectTypeDefs = gql`
         updateProject(id: ID!, input: ProjectInput!): Project
         deleteProject(id: ID!): String
     }
+
+    type Subscription {
+        projectCreated: Project
+        projectUpdated: Project
+        projectDeleted: ID
+        newMessage: String
+    }
 `;
 
 const projectResolvers = {
@@ -51,39 +58,60 @@ const projectResolvers = {
     },
     
     Mutation: {
-        createProject: async (_, { input }) => {
+        createProject: async (_, { input }, { pubsub }) => {
             if (input.name.trim() === '' || input.description.trim() === '') {
                 throw new Error('Este campo del proyecto no puede estar vacío.');
             }
-            console.log("entrada de datos", input);
             try {
-                console.log("entrada de datos", input);
-                const newProject = new Project({ ...input });
-                return await newProject.save();
+                const project = new Project(input);
+                const createdProject = await project.save();
+                pubsub.publish('PROJECT_CREATED', { projectCreated: createdProject });
+                return createdProject;
             } catch (error) {
-                console.log("entrada de datos", input);
                 throw new Error('Error al crear el proyecto: ' + error.message);
-                
             }
         },
 
-        updateProject: async (_, { id, input }) => {
+        updateProject: async (_, { id, input }, { pubsub }) => {
             try {
-                return await Project.findByIdAndUpdate(id, {...input }, { new: true });
+                const updatedProject = await Project.findByIdAndUpdate(id, input, { new: true });
+                pubsub.publish('PROJECT_UPDATED', { projectUpdated: updatedProject });
+                return updatedProject;
             }catch (error) {
                 throw new Error('Error al actualizar el proyecto: ' + error.message);
             }
         },
 
-        deleteProject: async (_, { id }) => {
+        deleteProject: async (_, { id }, { pubsub }) => {
             try{
                 await Project.findByIdAndDelete(id);
+                pubsub.publish('PROJECT_DELETED', { projectDeleted: id });
+                console.log('PUBSUB', pubsub);  // Esto debería mostrar el objeto PubSub
                 return 'Proyecto eliminado correctamente.';
+                
             }catch (error) {
                 throw new Error('Error al eliminar el proyecto: ' + error.message);
             }
         },
+
+    },
+
+    Subscription: {
+        projectCreated: {
+            subscribe: () => pubsub.asyncIterator('PROJECT_CREATED')
+        },
+        projectUpdated: {
+            subscribe: () => pubsub.asyncIterator('PROJECT_UPDATED')
+        },
+        projectDeleted: {
+            subscribe: () => pubsub.asyncIterator('PROJECT_DELETED')
+        },
+        projectDeleted: {
+            subscribe: () => pubsub.asyncIterator('PROJECT_DELETED')
+        },
+
     },
 };
 
 module.exports = { projectTypeDefs, projectResolvers };
+

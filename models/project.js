@@ -17,7 +17,7 @@ const projectSchema = new Schema({
     },
     backgroundcolor: {
         type: String,
-        default: '#ffffff',
+        default: '#000000',
     },
     backgroundimage: {
         type: String,

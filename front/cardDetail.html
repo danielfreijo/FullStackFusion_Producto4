@@ -45,8 +45,8 @@
             </div>
         </div>
     </nav>
-
-<div name="container" id="container"></div>
+    
+    <div name="container" id="container"></div>
 
     <!-- Modal de agregar tarea -->
     <div class="modal fade" id="addTaskModal" tabindex="-1" aria-labelledby="addTaskModalLabel" aria-hidden="true">
@@ -56,6 +56,7 @@
                     <h5 class="modal-title" id="addTaskModalLabel">Crear nueva tarea</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
+                <div class="modal-body mt-4"> 
                     <form id="addTaskForm">
                         <div class="form-group mb-4">
                             <label for="taskTitle">Título</label>
@@ -86,8 +87,8 @@
                             </select>
                         </div>
                         <div class="form-group mb-4">
-                            <label for="taskStatus">Cargar fichero</label>
-                            <input type="file" name="taskfile" id="taskfile">
+                            <label for="taskFile">Archivo</label>
+                            <input type="file" id="taskFile" name="taskFile" class="form-control">
                         </div>
                         <button type="submit" class="btn btn-primary mt-4 float-end">Agregar Tarea</button>
                     </form>
@@ -98,78 +99,49 @@
 
     <!-- Modal de editar tarea -->
     <div class="modal fade" id="editTaskModal" tabindex="-1" aria-labelledby="editTaskModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-xl">
+        <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="editTaskModalLabel">Editar tarea</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body mt-4"> 
-                    <div class="container-fluid">
-                            <div class="row">  
-                                <!-- Zona de formulario para editar tarea-->
-                                <div class="col-md-6 ml-auto">
-                                    <form id="editTaskForm">
-                                        <div class="form-group mb-4">
-                                            <label for="editTaskTitle">Título</label>
-                                            <input type="text" id="editTaskTitle" name="taskTitle" class="form-control" required>
-                                        </div>
-                                        <div class="form-group mb-4">
-                                            <label for="editTaskDescription">Descripción</label>
-                                            <textarea id="editTaskDescription" name="taskDescription" class="form-control" rows="3" required></textarea>
-                                        </div>
-                                        <div class="form-group mb-4">
-                                            <label for="editTaskResponsibles">Responsables:</label>
-                                            <input type="text" id="editTaskResponsibles" name="taskResponsibles" class="form-control">
-                                        </div>
-                                        <div class="form-group mb-4">
-                                            <label for="editTaskEndDate">Fecha de Finalización</label>
-                                            <input type="date" id="editTaskEndDate" name="taskEndDate" class="form-control" required>
-                                        </div>
-                                        <div class="form-group mb-4">
-                                            <label for="editTaskNotes">Notas</label>
-                                            <textarea id="editTaskNotes" name="taskNotes" class="form-control" rows="3"></textarea>
-                                        </div>
-                                        <div class="form-group mb-4">
-                                            <label for="editTaskStatus">Estado</label>
-                                            <select id="editTaskStatus" name="taskStatus" class="form-control">
-                                                <option value="POR HACER">Por Hacer</option>
-                                                <option value="EN PROGRESO">En Progreso</option>
-                                                <option value="FINALIZADO">Finalizado</option>
-                                            </select>
-                                        </div>
-                                        <button type="submit" class="btn btn-primary mt-4 float-end">Guardar Cambios</button>
-                                    </form>
-                                </div> 
-                                <!-- Zona de comentarios-->
-                                <div class="col-md-6 ml-auto float-md-end">
-                                    <div class="card bg-primary w-100 h-100">
-                                        <div class="card-body" style="height:300px; overflow-y: auto;">
-                                            <ul name="publishlist" id="publishlist" style="list-style-type: none; padding-left: 0; margin-left:0px;">
-                                                <li class="task-card-btn">Comentarios anteriores</li>
-                                                <li class="task-card-btn">Comentarios anteriores</li>
-                                                <li class="task-card-btn">Comentarios anteriores</li>
-                                            </ul>
-
-
-                                        </div>
-                                        <div class="card-foot center-text" style="background-color: #6c757d;">
-                                            
-                                                <label>Añadir comentario:</label><br>
-                                                <textarea class="form-control" name="newcomment" id="newcomment">Comentario</textarea>
-                                                <input class="btn btn-primary" type="submit" name="sendcomment" id="sendcomment">
-
-                                            
-                                        </div>
-                                    </div>
-
-
-                                </div>
-                            </div>
+                    <form id="editTaskForm">
+                        <div class="form-group mb-4">
+                            <label for="editTaskTitle">Título</label>
+                            <input type="text" id="editTaskTitle" name="taskTitle" class="form-control" required>
                         </div>
-
-                    </div>
-                    
+                        <div class="form-group mb-4">
+                            <label for="editTaskDescription">Descripción</label>
+                            <textarea id="editTaskDescription" name="taskDescription" class="form-control" rows="3" required></textarea>
+                        </div>
+                        <div class="form-group mb-4">
+                            <label for="editTaskResponsibles">Responsables:</label>
+                            <input type="text" id="editTaskResponsibles" name="taskResponsibles" class="form-control">
+                        </div>
+                        <div class="form-group mb-4">
+                            <label for="editTaskEndDate">Fecha de Finalización</label>
+                            <input type="date" id="editTaskEndDate" name="taskEndDate" class="form-control" required>
+                        </div>
+                        <div class="form-group mb-4">
+                            <label for="editTaskNotes">Notas</label>
+                            <textarea id="editTaskNotes" name="taskNotes" class="form-control" rows="3"></textarea>
+                        </div>
+                        <div class="form-group mb-4">
+                            <label for="editTaskStatus">Estado</label>
+                            <select id="editTaskStatus" name="taskStatus" class="form-control">
+                                <option value="POR HACER">Por Hacer</option>
+                                <option value="EN PROGRESO">En Progreso</option>
+                                <option value="FINALIZADO">Finalizado</option>
+                            </select>
+                        </div>
+                        <div class="form-group mb-4">
+                            <label for="editTaskFile">Archivo</label>
+                            <input type="file" id="editTaskFile" name="editTaskFile" class="form-control">
+                            <a id="editTaskFileLink" href="#" target="_blank" download>Descargar archivo</a>
+                        </div>
+                        <button type="submit" class="btn btn-primary mt-4 float-end">Guardar Cambios</button>
+                    </form>
                 </div>
             </div>
         </div>
@@ -249,8 +221,9 @@
                         <textarea class="form-control" id="sidebarDescription" rows="3"></textarea>
                     </div>
                     <div class="form-group mb-3">
-                        <label for="sidebarBackgroundTypeCard" class="form-label">Tipo de fondo para la targeta</label>
+                        <label for="sidebarBackgroundTypeCard" class="form-label">Cambiar fondo de targeta</label>
                         <select class="form-select" id="sidebarBackgroundTypeCard">
+                            <option value="null">Seleccione una opción</option>
                             <option value="color">Color</option>
                             <option value="image">Imagen</option>
                         </select>
@@ -271,6 +244,7 @@
                             <option value="diseño2.jpg">imagen 6</option>
                             <option value="marketing1.jpg">imagen 7</option>
                             <option value="marketing2.jpg">imagen 8</option>
+                            <option value="sushi.jpg">imagen 9</option>
                         </select>
                         <img id="previewImageCard" src="#" alt="Vista previa" style="width: 180px; height: 100px; display: none; margin-top: 10px; margin-bottom: 10px; border: 1px solid #000; border-radius: 5px; padding: 5px; background-color: #fff; box-shadow: 0 0 5px #000;">
                     </div>
@@ -283,8 +257,9 @@
                         </select>
                     </div>
                     <div class="form-group mb-3">
-                        <label for="sidebarBackgroundType" class="form-label">Tipo de fondo</label>
+                        <label for="sidebarBackgroundType" class="form-label">Cambiar fondo del tablero</label>
                         <select class="form-select" id="sidebarBackgroundType">
+                            <option value="null">Seleccione una opción</option>
                             <option value="color">Color</option>
                             <option value="image">Imagen</option>
                         </select>
@@ -316,8 +291,8 @@
     <script src="/assets/libraries/jquery-3.6.0.min.js" ></script>
     <script src="/assets/libraries/popper.min.js" ></script>
     <script src="/assets/libraries/bootstrap.bundle.min.js"></script>
-    <script src="/assets/libraries/socket.io/socket.io.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
     <script src="/js/cardDetail.js"></script>
-    
+
 </body>
 </html>

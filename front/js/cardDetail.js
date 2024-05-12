@@ -1,7 +1,12 @@
 let tasks
-const socket = io();
+let uploadedFilePath = null; // Variable para almacenar la ruta del archivo subido ya que se utiliza en varios lugares
 
-// Escuchar mensajes del servidor y mostrarlos en la lista
+const socket = io('ws://localhost:4000', {transports: ['websocket']});
+/* var socket = io.connect('ws://localhost:8000', {
+  transports: ['polling']
+});
+*/
+
 socket.on('mensaje', (mensaje) => {
   // Borramos lo que contenga el container de las alertas
   const container_borrar = document.getElementById('container');
@@ -41,39 +46,14 @@ socket.on('mensaje', (mensaje) => {
   // Agregar la tarjeta de alerta al contenedor
   container.appendChild(alertDiv);
 
-  alertshow();
+  updatesAlerts();
 
   setTimeout(() => {
-    alertshow();
-    container_borrar.classList.add('fade-out'); 
+    updatesAlerts();
     container_borrar.innerHTML = '';
     container_borrar.classList.remove('fade-out'); // Remover la clase de desvanecimiento
   }, 5000); // Remover el mensaje después de 5 segundos
-
-
 });
-
-/*
-{
-    "id": "662bc2021495ac5c3db15bc1",
-    "name": "Proyecto de prueba 2",
-    "description": "dsfbhdfnb",
-    "department": "Desarrollo",
-    "backgroundcolor": "#ffffff",
-    "backgroundimage": null,
-    "backgroundcolorcard": "#feb4b4",
-    "backgroundcard": null,
-    "priority": false,
-    "dateaccess": "1714146688000"
-}
-*/
-
-async function alertshow(){
-  const projectId = new URLSearchParams(window.location.search).get("id");
-  tasks = await getTasksByProjectId(projectId);
-  showTasksCards(tasks);
-}
-
 
 // Funciones asincronas 
 async function getProjectById(id) {
@@ -93,7 +73,6 @@ async function getProjectById(id) {
       }
     }
   `;
-
   const requestBody = JSON.stringify({
     query: query,
     variables: { id: id },
@@ -132,10 +111,10 @@ async function getTasksByProjectId(projectId) {
         ended
         notes
         status
+        pathFile
       }
     }
   `;
-
   const requestBody = JSON.stringify({
     query: query,
     variables: { projectId: projectId },
@@ -155,7 +134,7 @@ async function getTasksByProjectId(projectId) {
       console.error("Error en GraphQL:", responseBody.errors);
       throw new Error("Error al obtener las tareas por ID de proyecto");
     } else {
-      console.log("Tareas encontradas:", responseBody.data.getTasksByProjectId);
+      //console.log("Tareas encontradas:", responseBody.data.getTasksByProjectId);
       return responseBody.data.getTasksByProjectId;
     }
   } catch (error) {
@@ -195,15 +174,14 @@ async function updateTaskEndDate(taskId, newEndDate) {
       console.error("Error en GraphQL:", responseBody.errors);
       throw new Error("Error al actualizar la tarea");
     } else {
-      console.log("Tarea actualizada:", responseBody.data.updateTask);
+      //console.log("FECHA actualizada:", responseBody.data.updateTask);
     }
   } catch (error) {
     console.error("Error en la solicitud:", error);
   }
 }
 async function updateTaskStateInProject(taskId, newState) {
-  const projectId = new URLSearchParams(window.location.search).get("id");
-  
+
   const mutation = `
     mutation UpdateTask($updateTaskId: ID!, $input: TaskInput!) {
       updateTask(id: $updateTaskId, input: $input) {
@@ -237,7 +215,7 @@ async function updateTaskStateInProject(taskId, newState) {
       console.error('Error en GraphQL:', responseBody.errors);
       throw new Error('Error al actualizar la tarea');
     } else {
-      console.log('Tarea actualizada:', responseBody.data.updateTask);
+      //console.log('Tarea actualizada:', responseBody.data.updateTask);
       tasks = await getTasksByProjectId(projectId);
       showTasksCards(tasks);
     }
@@ -279,11 +257,106 @@ async function updateDateAccessProject(projectId) {
       console.error("Error en GraphQL:", responseBody.errors);
       throw new Error("Error al actualizar la fecha de acceso del proyecto");
     } else {
-      console.log("Proyecto actualizado:", responseBody.data.updateProject);
+      //console.log("Proyecto actualizado:", responseBody.data.updateProject);
     }
   } catch (error) {
     console.error("Error en la solicitud:", error);
   }
+}
+async function loadFile(selector, taskId = null) {
+  var fileField = document.querySelector(selector);
+  console.log('Campo de archivo:', fileField);
+  // Si no hay archivo seleccionado, establece uploadedFilePath en null y retorna
+  if (fileField.files.length === 0) {
+    uploadedFilePath = null;
+    return;
+  }
+  var formData = new FormData();
+  // Agrega el archivo seleccionado al objeto FormData
+  formData.append('file', fileField.files[0]);
+
+  try {
+    const response = await fetch('/upload', {
+      method: 'POST',
+      body: formData
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      uploadedFilePath = result.path; // Guarda la ruta del archivo en la variable
+      // Luego, actualiza la tarea con la ruta del archivo si taskId tiene un valor truthy
+      console.log("que le pasa a taskId", taskId);
+      
+      if (taskId) {
+        await updateTaskWithFilePath(taskId, uploadedFilePath);
+      }
+    } else {
+      console.error('Error:', response.statusText);
+    }
+  } catch (error) {
+    console.error('Error:', error);
+  }
+}
+async function updateTaskWithFilePath(taskId, filePath) {
+  console.log('Ruta del archivo:', filePath);
+  console.log('ID de la tarea:', taskId);
+
+  // Si filePath es null, no realizar ninguna actualización
+  if (filePath === null) {
+    console.log('No se seleccionó ningún archivo, no se realiza ninguna actualización');
+    return;
+  }
+
+  const serverUrl = 'https://69d2dk-4000.csb.app'; 
+  // Elimina 'front\' de la ruta del archivo
+  // const adjustedFilePath = filePath.replace('front\\', '');
+  const adjustedFilePath = filePath.replace('front/', '');
+
+  const downloadUrl = `${serverUrl}/${adjustedFilePath.replace(/\\/g, '/')}`;
+  console.log('URL de descarga:', downloadUrl);
+  const mutation = `
+    mutation UpdateTask($id: ID!, $input: TaskInput!) { 
+      updateTask(id: $id, input: $input) {
+        id
+        pathFile
+      }
+    } 
+  `;
+
+  const requestBody = {
+    query: mutation,
+    variables: {
+      id: taskId,
+      input: {
+        pathFile: downloadUrl,
+      },
+    },
+  };
+
+  try {
+    const response = await fetch("/api", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    const responseBody = await response.json();
+    if (responseBody.errors) {
+      console.error("Error en GraphQL:", responseBody.errors);
+      throw new Error("Error al actualizar la tarea");
+    } else {
+      console.log("Tarea actualizada:", responseBody.data.updateTask);
+    }
+  } catch (error) {
+    console.error("Error en la solicitud:", error);
+  }
+}
+async function updatesAlerts(){
+  const projectId = new URLSearchParams(window.location.search).get("id");
+  tasks = await getTasksByProjectId(projectId);
+  showTasksCards(tasks);
 }
 
 // Funcionalidades para la vista de detalle de una tarjeta
@@ -314,7 +387,7 @@ function createTaskCard(task) {
         </div>
       </div>
     </li>
-  `;
+  `; 
   socket.emit('mensaje', "Tarjeta creada");
 }
 function showTasksCards(tasks) {
@@ -368,7 +441,6 @@ function drop(event) {
       var targetState = targetContainer.getAttribute("data-state");
       draggedElement.dataset.state = targetState;
       updateTaskStateInProject(data, targetState);
-      socket.emit('mensaje', "Tarjeta ha cambiado de estado : "+targetState);
     } else {
       console.error(
         "No se pudo encontrar el contenedor de tarjetas dentro de la columna."
@@ -384,25 +456,12 @@ function drop(event) {
 
 // Funciones para el manejo de eventos
 $(document).ready(async function () {
-
-/*
-  Mostrando el comentario
-
-*/
-
-$("#sendcomment").on("click", function (e){
-  var addcomment = $("#newcomment").val();
-  //var taskname = $("#taskTitle").val();
-  $("#publishlist").append("<li class=\"task-card-btn\">"+addcomment+"</li>")
-});
-
+  
   // Obtener el ID del proyecto de la URL
   const urlParams = new URLSearchParams(window.location.search);
   const projectId = urlParams.get("id");
-  console.log("ID del proyecto:", projectId);
 
   const project = await getProjectById(projectId);
-  console.log("Proyecto encontrado:", project);
 
   if (project) {
     // Actualizar el campo dateAcces
@@ -451,24 +510,26 @@ $("#sendcomment").on("click", function (e){
         .show();
     }
 
+    $("#colorSection, #imageSection, #colorSectionCard, #imageSectionCard").hide();
     // Mostrar el tipo de fondo seleccionado
     $("#sidebarBackgroundType").change(function () {
       var selectedType = $(this).val();
-      if (selectedType === "color") {
+      
+       if (selectedType === "color") {
         $("#colorSection").show();
         $("#imageSection").hide();
         $("#sidebarBackgroundImage").val("");
-        //console.log('Imagen de fondo:', $('#sidebarBackgroundImage').val());
+        console.log('Imagen de fondo:', $('#sidebarBackgroundImage').val());
       } else {
         $("#colorSection").hide();
         $("#imageSection").show();
-        $("#sidebarBackgroundColor").val("#ffffff");
-        //console.log('Color de fondo:', $('#sidebarBackgroundColor').val());
+        console.log('Color de fondo:', $('#sidebarBackgroundColor').val());
       }
       //console.log('Tipo de fondo:', selectedType);
     });
     $("#sidebarBackgroundTypeCard").change(function () {
       var selectedType = $(this).val();
+  
       if (selectedType === "color") {
         $("#colorSectionCard").show();
         $("#imageSectionCard").hide();
@@ -477,8 +538,7 @@ $("#sendcomment").on("click", function (e){
       } else {
         $("#colorSectionCard").hide();
         $("#imageSectionCard").show();
-        $("#sidebarBackgroundColorCard").val("#ffffff");
-        //console.log('Color de fondo:', $('#sidebarBackgroundColorCard').val());
+        console.log('Color de fondo:', $('#sidebarBackgroundColorCard').val());
       }
       //console.log('Tipo de fondo:', selectedType);
     });
@@ -516,17 +576,11 @@ $("#sendcomment").on("click", function (e){
       const newBackgroundColor = $("#sidebarBackgroundColor").val();
       const newBackgroundImage = $("#sidebarBackgroundImage").val() || "";
       const newBackgroundColorCard = $("#sidebarBackgroundColorCard").val();
-      const newBackgroundImageCard =
-        $("#sidebarBackgroundImageCard").val() || "";
+      const newBackgroundImageCard = $("#sidebarBackgroundImageCard").val() || "";
 
-      /* Si se selecciona un color como fondo, establecer backgroundImage como ""
-      if (newBackgroundImage === "") {
-        newBackgroundImage = "";
-      }
-      if (newBackgroundImageCard === "") {
-        newBackgroundImageCard = "";
-      }*/
-
+      console.log("background card:", newBackgroundColorCard);
+      console.log("background image card:", newBackgroundImageCard);  
+      
       const mutation = `
         mutation UpdateProject($updateProjectId: ID!, $input: ProjectInput!) {
           updateProject(id: $updateProjectId, input: $input) {
@@ -541,7 +595,6 @@ $("#sendcomment").on("click", function (e){
           }
         }
       `;
-
       const requestBody = {
         query: mutation,
         variables: {
@@ -557,7 +610,6 @@ $("#sendcomment").on("click", function (e){
           },
         },
       };
-      //console.log('Cuerpo de la solicitud:', requestBody);
 
       try {
         const response = await fetch("/api", {
@@ -567,7 +619,6 @@ $("#sendcomment").on("click", function (e){
           },
           body: JSON.stringify(requestBody),
         });
-        //console.log('Respuesta de la API:', response);
 
         const responseBody = await response.json();
         if (responseBody.errors) {
@@ -631,15 +682,14 @@ $("#sendcomment").on("click", function (e){
       const taskToEdit = tasks.find(
         (task) => task.id.toString() === taskId.toString()
       );
-      console.log("Tarea a editar:", taskToEdit);
+      //console.log("Tarea a editar:", taskToEdit.enddate);
 
       const editDate = new Date(parseInt(taskToEdit.enddate, 10));
       const year = editDate.getFullYear();
       const month = editDate.getMonth() + 1;
       const day = editDate.getDate();
       const formattedDate = `${year}-${month.toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}`;
-
-      console.log('Estado:', taskToEdit.status);
+      //console.log('Estado:', taskToEdit.status);
 
       // Si se encuentra la tarea, llena el modal de edición con los datos de la tarea
       if (taskToEdit) {
@@ -652,6 +702,21 @@ $("#sendcomment").on("click", function (e){
 
         // Guarda el id de la tarea en un lugar accesible para cuando se guarde el formulario
         $("#editTaskForm").data("task-id", taskToEdit.id);
+        console.log('tarea a editar', taskToEdit);
+
+        document.getElementById('editTaskFile').value;
+        console.log('Ruta del archivo al editar:', taskToEdit.pathFile);
+        // Actualiza el enlace del archivo
+        if (taskToEdit.pathFile) {
+          $("#editTaskFileLink").attr("href", taskToEdit.pathFile).show();
+          // Obtiene el nombre del archivo de la ruta del archivo
+          const fileName = taskToEdit.pathFile.split('/').pop();
+
+          // Actualiza el texto del enlace de descarga
+          $("#editTaskFileLink").text(`Descargar archivo: ${fileName}`);
+        } else {
+          $("#editTaskFileLink").hide();
+        }
 
         // Muestra el modal
         $("#editTaskModal").modal("show");
@@ -668,7 +733,9 @@ $("#sendcomment").on("click", function (e){
       const enddate = $("#editTaskEndDate").val();
       const notes = $("#editTaskNotes").val();
       const status = $("#editTaskStatus").val();
-     
+      const uploadedFilePath = await loadFile('#editTaskFile', taskId);
+      const pathFile = uploadedFilePath || null;
+
       const mutation = `
         mutation UpdateTask($updateTaskId: ID!, $input: TaskInput!) {
           updateTask(id: $updateTaskId, input: $input) {
@@ -680,6 +747,7 @@ $("#sendcomment").on("click", function (e){
             enddate
             notes
             status
+            pathFile
           }
         }
       `;
@@ -712,7 +780,7 @@ $("#sendcomment").on("click", function (e){
           console.error("Error en GraphQL:", responseBody.errors);
           throw new Error("Error al actualizar la tarea");
         } else {
-          console.log("Tarea actualizada:", responseBody.data.updateTask);
+          console.log("Tarea actualizada en la funcion:", responseBody.data.updateTask);
           tasks = await getTasksByProjectId(projectId);
           showTasksCards(tasks);
         }
@@ -723,7 +791,6 @@ $("#sendcomment").on("click", function (e){
       // Cierra el modal
       $("#editTaskModal").modal("hide");
       socket.emit('mensaje', "Tarjeta [ "+title+" ] -->Modificada");
-      
     });
 
     // Agregar una nueva tarea al proyecto
@@ -740,9 +807,8 @@ $("#sendcomment").on("click", function (e){
         enddate: $("#taskEndDate").val(),
         notes: $("#taskNotes").val(),
         status: $("#taskStatus").val(),
+
       };
-      console.log("Datos de la tarea:", taskData);
-      //console.log('Fecha', taskData.enddate);
 
       const mutation = `
         mutation CreateTask($input: TaskInput!) { 
@@ -758,7 +824,6 @@ $("#sendcomment").on("click", function (e){
           }
         } 
       `;
-
       const requestBody = {
         query: mutation,
         variables: {
@@ -777,15 +842,18 @@ $("#sendcomment").on("click", function (e){
 
         const responseBody = await response.json();
         if (responseBody.errors) {
-          //console.log('Respuesta de la API:', response);
-          //console.log('Cuerpo de la solicitud:', requestBody);
-          //console.log('Respuesta del cuerpo:', responseBody);
           console.error("Error en GraphQL:", responseBody.errors);
           throw new Error("Error al crear la tarea");
         } else {
-          console.log("Nueva tarea:", taskData);
-          //tasks = await getTasksByProjectId(projectId);
-          //showTasksCards(tasks);
+          console.log("Nueva ID DE LA tarea:", responseBody.data.createTask);
+          // Si la creación de la tarea tiene éxito, sube el archivo
+          // obteniendo el id de la tarea creada
+          const taskId = responseBody.data.createTask.id;
+          await loadFile('#taskFile', taskId);
+
+          tasks = await getTasksByProjectId(projectId);
+          showTasksCards(tasks);
+
           $("#addTaskModal").modal("hide");
           $("#addTaskForm")[0].reset();
           socket.emit('mensaje', "Nueva tarjeta creada");
@@ -840,17 +908,16 @@ $("#sendcomment").on("click", function (e){
             throw new Error("Error al eliminar la tarea");
           } else {
             console.log("Tarea eliminada:", responseBody.data.deleteTask);
-            
             const updatedTasks = await getTasksByProjectId(projectId);
-            showTasksCards(updatedTasks);
-            $("#confirmationModal").modal("hide");  
-            socket.emit('mensaje', "Tarjeta eliminada.");
+            showTasksCards(updatedTasks); 
+
+            $("#confirmationModal").modal("hide"); 
+            socket.emit('mensaje', "Tarjeta eliminada."); 
           }
         } catch (error) {
           console.error("Error en la solicitud:", error);
         }
       });
-
       return false;
     });
   }

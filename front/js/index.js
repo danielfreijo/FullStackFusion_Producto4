@@ -1,7 +1,6 @@
 let projects = [];
-const socket = io();
+const socket = io('ws://localhost:4000', {transports: ['websocket']});
 
-// Escuchar mensajes del servidor y mostrarlos en la lista
 socket.on('mensaje', (mensaje) => {
   // Borramos lo que contenga el container de las alertas
   const container_borrar = document.getElementById('container');
@@ -40,6 +39,11 @@ socket.on('mensaje', (mensaje) => {
   
   // Agregar la tarjeta de alerta al contenedor
   container.appendChild(alertDiv);
+
+  setTimeout(() => {
+    container_borrar.innerHTML = '';
+    container_borrar.classList.remove('fade-out'); // Remover la clase de desvanecimiento
+  }, 5000); // Remover el mensaje después de 5 segundos
 });
 
 // 1. Definiciones de Funciones Asíncronas para interactuar con la API
@@ -70,16 +74,14 @@ async function getProjects() {
   });
 
   const responseBody = await response.text(); 
-  //console.log("Respuesta del servidor:", responseBody);
+
   try {
     const { data } = JSON.parse(responseBody);
-    //console.log("Datos obtenidos:", data);
     return data.getProjects;
   } catch (error) {
     console.error("Error al parsear la respuesta:", responseBody);
     throw new Error(`Error al obtener los proyectos: ${error}`);
   }
-  
 }
 
 // 2. Funciones para manipulación del DOM 
@@ -92,7 +94,7 @@ function createProjectCard(project) {
     const backgroundUrl = `/assets/BackgroundCards/${project.backgroundcard}`; 
     backgroundStyle = `background-image: url('${backgroundUrl}');`;
   }
-  //console.log("backgroundStyle:", backgroundStyle);
+
   const starIcon = project.priority === true 
   ? '<img src="/assets/estrellaM.png" alt="prioridad" style="width: 22px; height: 22px;">' 
   : '<img src="/assets/estrellaV.png" alt="sin prioridad" style="width: 22px; height: 22px;">';
@@ -106,6 +108,7 @@ function createProjectCard(project) {
       </div>
   </a>
   `;
+  socket.emit('mensaje', "proyecto creado" + project.name); 
 }
 function showRecentProjects(projects) {
   const recentProjects = $('#recentProjects');
@@ -126,7 +129,6 @@ function showRecentProjects(projects) {
 function showAllProjects(projects, category = 'all') {
   const allProjects = $('#allProjects');
   allProjects.empty();
-  //console.log('Categoría seleccionada:', category); 
 
   let filteredProjects;
   
@@ -135,7 +137,6 @@ function showAllProjects(projects, category = 'all') {
   } else {
     filteredProjects = projects.filter(project => project.department === category);
   }
-  //console.log('Proyectos filtrados:', filteredProjects); 
 
   // Ordenar los proyectos por su ID de manera ascendente
   filteredProjects.sort((a, b) => a.id - b.id);
@@ -159,12 +160,12 @@ function showPriorityProjects(projects) {
 
 // 3. Bloque de inicialización $(document).ready
 $(document).ready(async function() {
+
   try {
     projects = await getProjects();
     showRecentProjects(projects);
     showAllProjects(projects);
     showPriorityProjects(projects);
-    console.log('Proyectos obtenidos:', projects);
 
   } catch (error) { 
     console.error('Error al obtener los proyectos:', error);
@@ -173,7 +174,6 @@ $(document).ready(async function() {
   // Función para abrir el modal
   $('#openModal').click(function() {
     $('#addProjectModal').modal('show');
-    console.log("Modal abierto");
   });
   
   // Función para cambiar la sección de fondo
@@ -182,11 +182,9 @@ $(document).ready(async function() {
     if (backgroundType === 'color') {
       $('#colorSection').show();
       $('#imageSection').hide();
-      console.log("Tipo de fondo seleccionado fuera de la función:", backgroundType);
     } else if (backgroundType === 'image') {
       $('#imageSection').show();
       $('#colorSection').hide();
-      console.log("Tipo de fondo seleccionado fuera de la función:", backgroundType);
     }
   });
   $('#backgroundTypeCard').change(function() {
@@ -194,11 +192,9 @@ $(document).ready(async function() {
     if (backgroundTypeCard === 'color') {
       $('#colorSectionCard').show();
       $('#imageSectionCard').hide();
-      console.log("Tipo de fondo seleccionado fuera de la función:", backgroundTypeCard);
     } else if (backgroundTypeCard === 'image') {
       $('#imageSectionCard').show();
       $('#colorSectionCard').hide();
-      console.log("Tipo de fondo seleccionado fuera de la función:", backgroundTypeCard);
     }
   });
 
@@ -206,7 +202,6 @@ $(document).ready(async function() {
   $('#backgroundImage').change(function() {
     var selectedImage = $(this).val();
     if (selectedImage) {
-      console.log("Imagen seleccionada:", selectedImage);
       $('#previewImage').attr('src', '/assets/BackgroundsProjects/' + selectedImage).show();
     } else {
       $('#previewImage').hide();
@@ -215,7 +210,6 @@ $(document).ready(async function() {
   $('#backgroundImageCard').change(function() {
     var selectedImage = $(this).val();
     if (selectedImage) {
-      console.log("Imagen seleccionada:", selectedImage);
       $('#previewImageCard').attr('src', '/assets/BackgroundCards/' + selectedImage).show();
     } else {
       $('#previewImageCard').hide();
@@ -225,7 +219,6 @@ $(document).ready(async function() {
   // Evento para agregar un proyecto
   $('#addProjectForm').submit(async function(event) {
     event.preventDefault(); 
-    console.log("Formulario de proyecto enviado"); 
     
     // Obtener los valores del formulario
     const projectName = $('#projectName').val();
@@ -310,14 +303,14 @@ $(document).ready(async function() {
         console.error("Error al crear proyecto:", responseBody.errors);
         
       } else {
-        console.log("Proyecto creado exitosamente:", responseBody.data.createProject);
+        //console.log("Proyecto creado exitosamente:", responseBody.data.createProject);
         projects.push(responseBody.data.createProject);
-
-        showAllProjects(projects); 
         showRecentProjects(projects);
+        showAllProjects(projects);
         showPriorityProjects(projects);
-        
+
         $('#addProjectModal').modal('hide');
+        socket.emit('mensaje', "Nuevo proyecto creado."); 
       }
     } catch (error) {
       console.error("Error al realizar la solicitud a GraphQL:", error);
@@ -336,14 +329,12 @@ $(document).ready(async function() {
   // Función para mostrar el tablero del proyecto
   $(document).on('click', '.card', function() {
     var projectId = $(this).data('id');
-    console.log('Proyecto seleccionado:', projectId);
   });
 
   // Evento para cambiar la prioridad del proyecto
   $(document).on('click', '.priority-button', async function(event) {
     event.preventDefault();
     event.stopPropagation();
-    console.log('Se hizo clic en el botón de prioridad.');
 
     const card = $(this).closest('.card');
     const projectId = card.data('id');
@@ -391,8 +382,9 @@ $(document).ready(async function() {
         
         // Actualiza el estado local del proyecto
         project.priority = newPriority;
-
         showPriorityProjects(projects);
+
+        socket.emit('mensaje', "Proyecto actualizado"); 
       }
     } catch (error) {
       console.error("Error al realizar la solicitud a GraphQL:", error);
@@ -414,7 +406,6 @@ $(document).ready(async function() {
   // Evento para eliminar un proyecto
   $(document).on('click', '.delete-button', function(event) {
     event.preventDefault();
-    console.log("Botón de eliminación clicado");
 
     // Obtener el ID del proyecto asociado con la tarjeta
     var projectId = $(this).closest('.card').data('id');
@@ -453,23 +444,22 @@ $(document).ready(async function() {
           console.error("Error al eliminar el proyecto:", responseBody.errors);
           
         } else {
-          console.log("Proyecto eliminado con éxito", responseBody.data.deleteProject);
-
-          projects = projects.filter(project => project.id !== projectId); //mirar esto para tareas
-          
+          //console.log("Proyecto eliminado con éxito", responseBody.data.deleteProject);
+          projects = projects.filter(project => project.id !== projectId); 
           showRecentProjects(projects); 
           showAllProjects(projects);
           showPriorityProjects(projects);
 
           $('#confirmationModal').modal('hide');
+          socket.emit('mensaje', "Proyecto eliminado."); 
         }
       } catch (error) { 
         console.error("Error al realizar la solicitud a GraphQL:", error);
       }
     });
-    return false; // Evita el comportamiento predeterminado del enlace
+    return false;
   });
-
 });
+
 
 
