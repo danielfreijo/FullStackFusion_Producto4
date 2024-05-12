@@ -1,5 +1,6 @@
 const { gql } = require('apollo-server-express');
 const task = require('../models/task');
+const pubsub = require('../pubsub')
 
 const taskTypeDefs = gql`
 
@@ -98,13 +99,13 @@ const taskResolvers = {
     
     Subscription: {
         taskCreated: {
-            subscribe: (_, __, { pubsub }) => pubsub.asyncIterator('TASK_CREATED')
+            subscribe: () => pubsub.asyncIterator('TASK_CREATED')
         },
         taskUpdated: {
-            subscribe: (_, __, { pubsub }) => pubsub.asyncIterator('TASK_UPDATED')
+            subscribe: () => pubsub.asyncIterator('TASK_UPDATED')
         },
         taskDeleted: {
-            subscribe: (_, __, { pubsub }) => pubsub.asyncIterator('TASK_DELETED')
+            subscribe: () => pubsub.asyncIterator('TASK_DELETED')
         }
     }
 };

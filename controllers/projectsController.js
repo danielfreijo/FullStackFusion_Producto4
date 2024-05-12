@@ -1,6 +1,6 @@
 const { gql } = require('apollo-server-express');
 const Project = require('../models/project');
-
+const pubsub = require('../pubsub');
 const projectTypeDefs = gql`
 
     type Project {
@@ -96,19 +96,13 @@ const projectResolvers = {
 
     Subscription: {
         projectCreated: {
-            subscribe: (_, __, { pubsub }) => pubsub.asyncIterator('PROJECT_CREATED')
+            subscribe: () => pubsub.asyncIterator('PROJECT_CREATED')
         },
         projectUpdated: {
-            subscribe: (_, __, { pubsub }) => pubsub.asyncIterator('PROJECT_UPDATED')
+            subscribe: () => pubsub.asyncIterator('PROJECT_UPDATED')
         },
         projectDeleted: {
-            subscribe: (_, __, { pubsub }) => {
-            console.log('pubsub:', pubsub);  // Esto debería mostrar el objeto PubSub
-            if (!pubsub) {
-                throw new Error('PubSub instance is undefined.');
-            }
-            return pubsub.asyncIterator('PROJECT_DELETED');
-            },
+            subscribe: () => pubsub.asyncIterator('PROJECT_DELETED')
         },
     },
 };

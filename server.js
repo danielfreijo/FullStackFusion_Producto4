@@ -10,9 +10,10 @@ const { makeExecutableSchema } = require('@graphql-tools/schema');
 const { projectTypeDefs, projectResolvers } = require('./controllers/projectsController');
 const { taskTypeDefs, taskResolvers } = require('./controllers/tasksController');
 const { connection } = require('./config/connectionDB');
+const { WebSocketServer } = require('ws');
 const pubsub = require('./pubsub');
 const multer = require('multer');
-
+//console.log("PubSub instance:", pubsub);
 
 // Configuración de multer para la carga de archivos
 const storage = multer.diskStorage({
@@ -40,7 +41,9 @@ app.get("/", (req, res) => {
 
 // Creación del servidor HTTP y del servidor de Socket.IO
 const httpServer = createServer(app);
-const io = new Server(httpServer);
+const io = new Server(httpServer, {
+  path: '/socket.io'
+});
 
 // Manejo de conexiones de Socket.IO
 io.on("connection", (socket) => {
@@ -76,13 +79,11 @@ const schema = makeExecutableSchema({
 async function startServer() {
   const apolloServer = new ApolloServer({
     schema,
-    context: ({ req }) => ({ req, io, pubsub }) 
+    context: ({ req }) => ({ req, pubsub, io }) 
   });
-
   await apolloServer.start();
   apolloServer.applyMiddleware({ app, path: '/api' });
 
-  console.log("Schema:", schema);
   // Configuración de SubscriptionServer
   SubscriptionServer.create({
     schema,
