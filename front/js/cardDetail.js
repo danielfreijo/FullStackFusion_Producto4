@@ -1,7 +1,8 @@
 let tasks
 let uploadedFilePath = null; // Variable para almacenar la ruta del archivo subido ya que se utiliza en varios lugares
 
-const socket = io('ws://localhost:4000', {transports: ['websocket']});
+const socket = io('ws://localhost:4000/api/subscriptions', {transports: ['polling']});
+// const socket = io('ws://localhost:4000/api/subscriptions', {transports: ['websocket']});
 /* var socket = io.connect('ws://localhost:8000', {
   transports: ['polling']
 });

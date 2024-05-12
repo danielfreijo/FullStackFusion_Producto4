@@ -43,7 +43,6 @@ const projectTypeDefs = gql`
         projectCreated: Project
         projectUpdated: Project
         projectDeleted: ID
-        newMessage: String
     }
 `;
 

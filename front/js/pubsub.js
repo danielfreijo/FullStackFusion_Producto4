@@ -1,16 +1,5 @@
 import { gql, useSubscription } from '@apollo/client';
 
-// Definir la suscripción GraphQL
-const NEW_MESSAGE_SUBSCRIPTION = gql`
-  subscription {
-    newMessage {
-      idtask
-      author
-      comment
-    }
-  }
-`;
-
 // Utilizar la suscripción en un componente de React
 function MessageList() {
   const { data, loading, error } = useSubscription(NEW_MESSAGE_SUBSCRIPTION);

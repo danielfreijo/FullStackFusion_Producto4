@@ -1,5 +1,7 @@
 let projects = [];
-const socket = io('ws://localhost:4000', {transports: ['websocket']});
+//const socket = io('ws://localhost:4000/api/subscriptions', {transports: ['websocket']});
+//const socket = io('ws://localhost:4000/api/subscriptions', {transports: ['polling']});
+const socket = io();
 
 socket.on('mensaje', (mensaje) => {
   // Borramos lo que contenga el container de las alertas
@@ -44,6 +46,9 @@ socket.on('mensaje', (mensaje) => {
     container_borrar.innerHTML = '';
     container_borrar.classList.remove('fade-out'); // Remover la clase de desvanecimiento
   }, 5000); // Remover el mensaje después de 5 segundos
+
+  exampleWS.send("Here's some text that the server is urgently awaiting!");
+
 });
 
 // 1. Definiciones de Funciones Asíncronas para interactuar con la API
@@ -300,7 +305,7 @@ $(document).ready(async function() {
 
       const responseBody = await response.json();
       if (responseBody.errors) {
-        console.error("Error al crear proyecto:", responseBody.errors);
+        exampleWS.send("Error al crear proyecto:", responseBody.errors);
         
       } else {
         //console.log("Proyecto creado exitosamente:", responseBody.data.createProject);

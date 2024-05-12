@@ -44,7 +44,6 @@ const taskTypeDefs = gql`
         taskCreated: Task
         taskUpdated: Task
         taskDeleted: ID
-        newMessage: String
     }
 `;
 

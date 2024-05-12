@@ -3,7 +3,7 @@ const express = require('express');
 const path = require('path');
 const { createServer } = require('http');
 // ------------------------------------------------------
-const { ApolloServer } = require('apollo-server-express');
+const { ApolloServer, gpl } = require('apollo-server-express');
 // ------------------------------------------------------
 const { Server } = require('socket.io');
 // ------------------------------------------------------
@@ -18,15 +18,20 @@ const { makeExecutableSchema } = require('@graphql-tools/schema');
 // ------------------------------------------------------
 const { projectTypeDefs, projectResolvers } = require('./controllers/projectsController');
 const { taskTypeDefs, taskResolvers } = require('./controllers/tasksController');
-//const { pubsubSubscription } = require('./controllers/pubsubController');
+const { pubTypeDefs, pubResolvers } = require('./controllers/pubsubController');
 // ------------------------------------------------------
 const { connection } = require('./config/connectionDB');
 // ------------------------------------------------------
 const { WebSocketServer } = require('ws');
-const pubsub = require('./pubsub');
+
+// const pubsub = require('./pubsub');
+const pubsub = new PubSub();
+module.exports = pubsub;
+
 const multer = require('multer');
 // ------------------------------------------------------
 //console.log("PubSub instance:", pubsub);
+
 
 // Configuración de multer para la carga de archivos
 const storage = multer.diskStorage({
@@ -54,40 +59,57 @@ app.get("/", (req, res) => {
 
 // Creación del servidor HTTP y del servidor de Socket.IO
 const httpServer = createServer(app);
+
+const wsServer = new WebSocketServer({ server: httpServer }); // Aquí creas el WebSocketServer
+
 const io = new Server(httpServer, {
   path: '/socket.io'
 });
 
-const pubsub2 = new PubSub();
-
 // Manejo de conexiones de Socket.IO
 io.on("connection", (socket) => {
-  pubsub.publish('mensaje', { newMessage: 'Usuario conectado a través de WebSocket'} );
+  pubsub.publish('POST_ADDED', { newMessage: 'Usuario conectado a través de WebSocket'} );
   socket.on('mensaje', (mensaje) => {
     //console.log('Mensaje recibido:', mensaje);
     io.emit('mensaje', mensaje);
     // Publicar el mensaje como una nueva suscripción de GraphQL
-    pubsub.publish('mensaje', { newMessage: mensaje });
+    pubsub.publish('POST_ADDED', { newMessage: mensaje });
   });
   socket.on("disconnect", () => {
-    pubsub.publish('mensaje', { newMessage: 'Usuario desconectado a través de WebSocket'} );
+    pubsub.publish('POST_ADDED', { newMessage: 'Usuario desconectado a través de WebSocket'} );
   });
 });
 
+
 const schema = makeExecutableSchema({
-  typeDefs: [projectTypeDefs, taskTypeDefs],
+  typeDefs: [projectTypeDefs, taskTypeDefs, pubTypeDefs],
   resolvers: {
     Query: {
       ...projectResolvers.Query,
       ...taskResolvers.Query,
+      ...pubResolvers.Query
     },
     Mutation: {
       ...projectResolvers.Mutation,
       ...taskResolvers.Mutation,
+      ...pubResolvers.Mutation,
     },
     Subscription: {
       ...projectResolvers.Subscription,
       ...taskResolvers.Subscription,
+      ...pubResolvers.Subscription,
+    }
+  },
+  playground: {
+    subscriptionEndpoint: 'http://localhost:4000/api/subscriptions'
+  },
+  subscriptions: {
+    keepAlive: 9000,
+    onConnect: (connParams, webSocket, context) => {
+        console.log('CLIENT CONNECTED');
+    },
+    onDisconnect: (webSocket, context) => {
+        console.log('CLIENT DISCONNECTED')
     }
   },
 });
@@ -96,13 +118,13 @@ const schema = makeExecutableSchema({
 async function startServer() {
   const apolloServer = new ApolloServer({
     schema,
-    context: ({ req }) => ({ req, pubsub2, io }) 
+    context: ({ req }) => ({ req, pubsub, io }) 
   });
   await apolloServer.start();
   apolloServer.applyMiddleware({ app, path: '/api' });
 
-  // Configuración de SubscriptionServer
-  SubscriptionServer.create({
+    // Configuración de SubscriptionServer
+  const subscriptionServer = SubscriptionServer.create({
     schema,
     execute,
     subscribe,
@@ -113,17 +135,18 @@ async function startServer() {
     path: '/api/subscriptions'
   });
 
+  // Configuración del puerto de escucha del servidor
+  const PORT = process.env.PORT || 4000;
+  httpServer.listen(PORT, () => {
+    console.log(`🚀 Server ready at http://localhost:${PORT}`)
+    console.log(`🚀 Subscriptions ready at ws://localhost:${PORT}/api/subscriptions`)
+  });
+
   // Middleware para manejar rutas no encontradas
   app.use((req, res, next) => {
     res.status(404).send('Error 404');
   });
 
-  // Configuración del puerto de escucha del servidor
-  const PORT = process.env.PORT || 4000;
-  httpServer.listen(PORT, () => {
-    console.log(`🚀 Server ready at http://localhost:${PORT}`)
-    console.log(`🚀 Subscriptions ready at http://localhost:${PORT}/api/subscriptions`)
-  });
 }
 
 // Ruta para la carga de archivos

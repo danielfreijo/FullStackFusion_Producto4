@@ -2,20 +2,42 @@ const { gql } = require('apollo-server-express');
 const { SubscriptionServer } = require('subscriptions-transport-ws');
 const subscriptiones = require('../models/pubsub');
 
-const pubsubTypeDefs = gql`
-type Subscription {
-    newMessage: String
-  }
+const POST_ADDED = 'POST_ADDED';
+
+const pubTypeDefs = gql`
+    type Subscription {
+        postHello: String!
+    }
+    
+    type Query {
+        hello: String!
+    }
+    
+    type Mutation {
+        addHello(hello: String!): String!
+    }
 `;
 
-const publicarsubscripcion = {
+const pubResolvers = {
     Subscription: {
-        newmessage: {
-            async subscribe (_, __, { pubsub} ){
-                return pubsub.asyncIterator("NEW_MESSAGE")
-            }
-        },
-      },
+        postHello: {
+            subscribe: () => pubsub.asyncIterator([POST_ADDED])
+        }
+    },
+
+    Query: {
+        hello (obj, args) {
+            const arr = ["aaaaaa", "bbbbb", "cccccccc"];
+            return arr[args.id]
+        }
+    },
+
+    Mutation: {
+        async addHello (obj, args) {
+            await pubsub.publish(POST_ADDED, {postHello: args.hello})
+            return args.hello
+        }
+    }
 };
 
-module.exports = { publicarsubscripcion };
+module.exports = { pubTypeDefs, pubResolvers };
