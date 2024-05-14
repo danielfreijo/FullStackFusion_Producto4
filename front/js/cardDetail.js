@@ -51,6 +51,108 @@ socket.on('mensaje', (mensaje) => {
   }, 5000); // Remover el mensaje después de 5 segundos
 });
 
+function subscribeToTaskUpdates() {
+  const ws = new WebSocket('ws://localhost:4000/api/subscriptions');
+
+  ws.onopen = () => {
+    console.log('Conexión establecida');
+
+    const subscriptionQueryCreated = JSON.stringify({
+      type: 'start',
+      id: '1',
+      payload: {
+        query: `
+          subscription {
+            taskCreated {
+              id
+              project_id
+              title
+              description
+              responsible
+              enddate
+              notes
+              status
+            }
+          }
+        `,
+      },
+    });
+    ws.send(subscriptionQueryCreated);
+
+    const subscriptionQueryUpdated = JSON.stringify({
+      type: 'start',
+      id: '2',
+      payload: {
+        query: `
+          subscription {
+            taskUpdated {
+              id
+              project_id
+              title
+              description
+              responsible
+              enddate
+              notes
+              status
+            }
+          }
+        `,
+      },
+    });
+    ws.send(subscriptionQueryUpdated);
+
+    const subscriptionQueryDeleted = JSON.stringify({
+      type: 'start',
+      id: '3',
+      payload: {
+        query: `
+          subscription {
+            taskDeleted
+          }
+        `,
+      },
+    });
+    ws.send(subscriptionQueryDeleted);
+  };
+
+  ws.onmessage = (event) => {
+    console.log('Mensaje recibido:', event.data); 
+    const data = JSON.parse(event.data);
+    console.log('Datos:', data);
+
+    if (data.taskCreated) {
+      console.log('Tarea creada:', data.taskCreated);
+      const task = data.taskCreated;
+      tasks.push(task);
+      showTasksCards(tasks);
+      socket.emit('mensaje', "Nueva tarjeta creada");
+    } else if (data.taskUpdated) {
+      console.log('Tarea actualizada:', data.taskUpdated);
+      const updatedTask = data.taskUpdated; 
+      const taskIndex = tasks.findIndex((task) => task.id === updatedTask.id);
+      if (taskIndex !== -1) {
+        tasks[taskIndex] = updatedTask;
+        showTasksCards(tasks);
+        socket.emit('mensaje', "Tarjeta actualizada");
+      }
+    } else if (data.taskDeleted) {
+      console.log('Tarea eliminada:', data.taskDeleted);
+      const deletedTaskId = data.taskDeleted;
+      tasks = tasks.filter((task) => task.id !== deletedTaskId);
+      showTasksCards(tasks);
+      socket.emit('mensaje', "Tarjeta eliminada");
+    }
+  };
+
+  ws.onclose = () => {
+    console.log('Conexión cerrada');
+  }
+
+  ws.onerror = (error) => {
+    console.error('Error:', error);
+  };
+}
+
 // Funciones asincronas 
 async function getProjectById(id) {
   const query = `
@@ -418,6 +520,25 @@ function allowDrop(event) {
 function drag(event) {
   const taskId = event.target.getAttribute("data-task-id");
   event.dataTransfer.setData("text/plain", taskId);
+  // Crear una imagen personalizada para el icono de arrastre
+  var dragIcon = document.createElement('img');
+  dragIcon.src = 'http://localhost:4000/assets/copy.png';
+  dragIcon.width = 90;
+  dragIcon.style.opacity = 0.5;
+  dragIcon.style.position = 'absolute'; 
+  dragIcon.style.left = '0'; 
+  dragIcon.style.top = '0';
+
+  // Añade el dragIcon al cuerpo del documento para garantizar su visibilidad durante el arrastre
+  document.body.appendChild(dragIcon);
+
+  // Establece el dragIcon como el icono de arrastre con un desplazamiento personalizado
+  event.dataTransfer.setDragImage(dragIcon, 10, 10);
+
+  // Elimina el dragIcon del cuerpo del documento después del arrastre
+  setTimeout(() => {
+      document.body.removeChild(dragIcon);
+  }, 0);
 }
 function drop(event) {
   event.preventDefault();
@@ -446,8 +567,8 @@ function drop(event) {
     console.error(
       "No se pudo encontrar el elemento arrastrado con el ID:",
       data
-    );
-  }
+    );
+  }
 }
 
 // Funciones para el manejo de eventos
@@ -462,6 +583,7 @@ $(document).ready(async function () {
   if (project) {
     // Actualizar el campo dateAcces
     updateDateAccessProject(projectId);
+    subscribeToTaskUpdates();
 
     // Mostrar el nombre del proyecto en la barra de navegación
     $("#projectName").text(project.name.toUpperCase());

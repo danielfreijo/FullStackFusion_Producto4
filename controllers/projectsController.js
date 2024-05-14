@@ -1,8 +1,8 @@
 const { gql } = require('apollo-server-express');
 const Project = require('../models/project');
 const pubsub = require('../pubsub');
-const projectTypeDefs = gql`
 
+const projectTypeDefs = gql`
     type Project {
         id: ID!
         name: String!
@@ -76,19 +76,17 @@ const projectResolvers = {
                 const updatedProject = await Project.findByIdAndUpdate(id, input, { new: true });
                 pubsub.publish('PROJECT_UPDATED', { projectUpdated: updatedProject });
                 return updatedProject;
-            }catch (error) {
+            } catch (error) {
                 throw new Error('Error al actualizar el proyecto: ' + error.message);
             }
         },
 
         deleteProject: async (_, { id }, { pubsub }) => {
-            try{
+            try {
                 await Project.findByIdAndDelete(id);
                 pubsub.publish('PROJECT_DELETED', { projectDeleted: id });
-                console.log('PUBSUB', pubsub);  // Esto debería mostrar el objeto PubSub
                 return 'Proyecto eliminado correctamente.';
-                
-            }catch (error) {
+            } catch (error) {
                 throw new Error('Error al eliminar el proyecto: ' + error.message);
             }
         },

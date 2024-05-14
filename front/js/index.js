@@ -1,3 +1,4 @@
+
 let projects = [];
 const socket = io();
 
@@ -45,6 +46,131 @@ socket.on('mensaje', (mensaje) => {
     container_borrar.classList.remove('fade-out'); // Remover la clase de desvanecimiento
   }, 5000); // Remover el mensaje después de 5 segundos
 });
+
+function subscribeToProjectUpdates() {
+  const ws = new WebSocket('ws://localhost:4000/api/subscriptions');
+
+  ws.onopen = () => {
+    console.log('Conexión WebSocket abierta');
+    
+    // Suscribirse a projectCreated
+    const subscriptionQueryCreated = JSON.stringify({
+      type: 'start',
+      id: '1',
+      payload: {
+        variables: {},
+        extensions: {},
+        operationName: null,
+        query: `
+          subscription {
+            projectCreated {
+              id
+              name
+              description
+              department
+              backgroundcolor
+              backgroundimage
+              backgroundcolorcard
+              backgroundcard
+              priority
+              dateaccess
+            }
+          }
+        `,
+      },
+    });
+    ws.send(subscriptionQueryCreated);
+    
+    // Suscribirse a projectUpdated
+    const subscriptionQueryUpdated = JSON.stringify({
+      type: 'start',
+      id: '2',
+      payload: {
+        variables: {},
+        extensions: {},
+        operationName: null,
+        query: `
+          subscription {
+            projectUpdated {
+              id
+              name
+              description
+              department
+              backgroundcolor
+              backgroundimage
+              backgroundcolorcard
+              backgroundcard
+              priority
+              dateaccess
+            }
+          }
+        `,
+      },
+    });
+    ws.send(subscriptionQueryUpdated);
+
+    // Suscribirse a projectDeleted
+    const subscriptionQueryDeleted = JSON.stringify({
+      type: 'start',
+      id: '3',
+      payload: {
+        variables: {},
+        extensions: {},
+        operationName: null,
+        query: `
+          subscription {
+            projectDeleted
+          }
+        `,
+      },
+    });
+    ws.send(subscriptionQueryDeleted);
+  };
+
+  ws.onmessage = (event) => {
+    console.log('Mensaje recibido en WebSocket:', event.data); 
+    const data = JSON.parse(event.data);
+    console.log('Data:', data);
+
+    // Verificar y manejar los diferentes tipos de datos recibidos
+    if (data.projectCreated) {
+      console.log('Project Created:', data.projectCreated);
+      const project = data.projectCreated;
+      projects.push(project);
+      showRecentProjects(projects);
+      showAllProjects(projects);
+      showPriorityProjects(projects);
+      socket.emit('mensaje', `Nuevo proyecto creado: ${project.name}`);
+    } else if (data.projectUpdated) {
+      console.log('Project Updated:', data.projectUpdated);
+      const project = data.projectUpdated;
+      const index = projects.findIndex(p => p.id === project.id);
+      if (index !== -1) {
+        projects[index] = project;
+        showRecentProjects(projects);
+        showAllProjects(projects);
+        showPriorityProjects(projects);
+        socket.emit('mensaje', `Proyecto actualizado: ${project.name}`);
+      }
+    } else if (data.projectDeleted) {
+      console.log('Project Deleted:', data.projectDeleted);
+      const projectId = data.projectDeleted;
+      projects = projects.filter(p => p.id !== projectId);
+      showRecentProjects(projects);
+      showAllProjects(projects);
+      showPriorityProjects(projects);
+      socket.emit('mensaje', `Proyecto eliminado: ${projectId}`);
+    }
+  };
+
+  ws.onclose = () => {
+    console.log('Conexión WebSocket cerrada');
+  };
+
+  ws.onerror = (error) => {
+    console.error('WebSocket error:', error);
+  };
+}
 
 // 1. Definiciones de Funciones Asíncronas para interactuar con la API
 async function getProjects() {
@@ -160,12 +286,13 @@ function showPriorityProjects(projects) {
 
 // 3. Bloque de inicialización $(document).ready
 $(document).ready(async function() {
-
+  
   try {
     projects = await getProjects();
     showRecentProjects(projects);
     showAllProjects(projects);
     showPriorityProjects(projects);
+    subscribeToProjectUpdates();
 
   } catch (error) { 
     console.error('Error al obtener los proyectos:', error);
@@ -305,9 +432,6 @@ $(document).ready(async function() {
       } else {
         //console.log("Proyecto creado exitosamente:", responseBody.data.createProject);
         projects.push(responseBody.data.createProject);
-        showRecentProjects(projects);
-        showAllProjects(projects);
-        showPriorityProjects(projects);
 
         $('#addProjectModal').modal('hide');
         socket.emit('mensaje', "Nuevo proyecto creado."); 
