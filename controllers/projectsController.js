@@ -1,8 +1,8 @@
 const { gql } = require('apollo-server-express');
 const Project = require('../models/project');
+const pubsub = require('../pubsub');
 
 const projectTypeDefs = gql`
-
     type Project {
         id: ID!
         name: String!
@@ -38,6 +38,12 @@ const projectTypeDefs = gql`
         updateProject(id: ID!, input: ProjectInput!): Project
         deleteProject(id: ID!): String
     }
+
+    type Subscription {
+        projectCreated: Project
+        projectUpdated: Project
+        projectDeleted: ID
+    }
 `;
 
 const projectResolvers = {
@@ -51,45 +57,50 @@ const projectResolvers = {
     },
     
     Mutation: {
-        createProject: async (_, { input }, { io }) => {
+        createProject: async (_, { input }, { pubsub }) => {
             if (input.name.trim() === '' || input.description.trim() === '') {
                 throw new Error('Este campo del proyecto no puede estar vacío.');
             }
             try {
-                const newProject = new Project({ ...input });
-                const savedProject = await newProject.save();
-                io.emit('projectAdded', savedProject);
-                console.log("Proyecto creado y emitido CONTROLLER:", savedProject);
-                return savedProject;
+                const project = new Project(input);
+                const createdProject = await project.save();
+                pubsub.publish('PROJECT_CREATED', { projectCreated: createdProject });
+                return createdProject;
             } catch (error) {
                 throw new Error('Error al crear el proyecto: ' + error.message);
             }
         },
 
-        updateProject: async (_, { id, input }, { io }) => {
+        updateProject: async (_, { id, input }, { pubsub }) => {
             try {
-                const updatedProject = await Project.findByIdAndUpdate(id, {...input }, { new: true });
-                io.emit('projectUpdated', updatedProject);  
-                console.log("Proyecto actualizado y emitido CONTROLLER:", updatedProject);
+                const updatedProject = await Project.findByIdAndUpdate(id, input, { new: true });
+                pubsub.publish('PROJECT_UPDATED', { projectUpdated: updatedProject });
                 return updatedProject;
-            }catch (error) {
+            } catch (error) {
                 throw new Error('Error al actualizar el proyecto: ' + error.message);
             }
         },
 
-        deleteProject: async (_, { id }, { io }) => {
-            try{
-                const deletedProject = await Project.findByIdAndDelete(id);
-                if (deletedProject) {
-                    io.emit('projectDeleted', { id });
-                    console.log("Proyecto eliminado y emitido CONTROLLER:", id);
-                    return 'Proyecto eliminado correctamente.';
-                } else {
-                    throw new Error('El proyecto no existe.');
-                } 
-            }catch (error) {
+        deleteProject: async (_, { id }, { pubsub }) => {
+            try {
+                await Project.findByIdAndDelete(id);
+                pubsub.publish('PROJECT_DELETED', { projectDeleted: id });
+                return 'Proyecto eliminado correctamente.';
+            } catch (error) {
                 throw new Error('Error al eliminar el proyecto: ' + error.message);
             }
+        },
+    },
+
+    Subscription: {
+        projectCreated: {
+            subscribe: () => pubsub.asyncIterator('PROJECT_CREATED')
+        },
+        projectUpdated: {
+            subscribe: () => pubsub.asyncIterator('PROJECT_UPDATED')
+        },
+        projectDeleted: {
+            subscribe: () => pubsub.asyncIterator('PROJECT_DELETED')
         },
     },
 };
